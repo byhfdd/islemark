@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>新标签页</title>
+  <link rel="stylesheet" href="css/main.css">
+  <link rel="stylesheet" href="css/settings.css">
+</head>
+<body>
+  <div id="bg" class="bg"></div>
+  <div id="bgDim" class="bg-dim"></div>
+
+  <main class="page">
+    <div class="stage">
+      <section id="clockBlock" class="clock-block" hidden>
+        <div id="clockLine" class="clock-line">
+          <span id="clockTime" class="clock-time">00:00</span>
+          <span id="clockDate" class="clock-date"></span>
+        </div>
+        <p id="clockQuote" class="clock-quote" hidden></p>
+      </section>
+
+      <header class="topbar">
+        <div id="searchArea" class="search-area">
+          <form id="searchForm" class="search-shell" autocomplete="off">
+            <button type="button" id="engineBtn" class="engine-btn" title="选择搜索引擎">
+              <span id="engineBadge" class="engine-badge bing">b</span>
+              <svg class="icon caret"><use href="#i-caret"></use></svg>
+            </button>
+            <input id="searchInput" class="search-input" type="text" placeholder="输入并搜索" spellcheck="false">
+            <button type="submit" id="searchSubmit" class="search-submit" title="搜索">
+              <svg class="icon"><use href="#i-search"></use></svg>
+            </button>
+          </form>
+          <div id="suggestBox" class="suggest-box" hidden></div>
+        </div>
+        <button id="homeBtn" class="round-btn" title="回到首页并刷新书签">
+          <svg class="icon"><use href="#i-home"></use></svg>
+        </button>
+        <button id="menuBtn" class="round-btn" title="设置">
+          <svg class="icon"><use href="#i-menu"></use></svg>
+        </button>
+      </header>
+
+      <div id="gridViewport" class="grid-viewport">
+        <div id="gridTrack" class="grid-track"></div>
+      </div>
+
+      <div id="dots" class="dots"></div>
+
+      <div id="emptyState" class="empty-state" hidden>
+        <div class="empty-title"></div>
+        <p class="empty-desc"></p>
+        <button id="emptyRefresh" class="ghost-btn light" type="button">
+          <svg class="icon"><use href="#i-reset"></use></svg>
+          <span>刷新书签</span>
+        </button>
+      </div>
+    </div>
+  </main>
+
+  <div id="folderScrim" class="folder-scrim" hidden></div>
+  <div id="folderPanel" class="folder-panel" hidden>
+    <div class="folder-head">
+      <button id="folderBack" class="folder-back" type="button" hidden title="返回上一级">
+        <svg class="icon"><use href="#i-back"></use></svg>
+      </button>
+      <span id="folderTitle"></span>
+    </div>
+    <div id="folderBody" class="folder-body"></div>
+  </div>
+
+  <div id="drawerScrim" class="drawer-scrim" hidden></div>
+  <aside id="settingsDrawer" class="drawer" aria-hidden="true">
+    <header class="drawer-head">
+      <h2>设置</h2>
+      <button id="drawerClose" class="round-btn dark" type="button" title="关闭设置">
+        <svg class="icon"><use href="#i-close"></use></svg>
+      </button>
+    </header>
+    <div id="drawerBody" class="drawer-body"></div>
+    <footer class="drawer-foot">
+      <button id="resetBtn" class="ghost-btn" type="button">
+        <svg class="icon"><use href="#i-reset"></use></svg>
+        <span>恢复默认设置</span>
+      </button>
+    </footer>
+  </aside>
+
+  <svg class="svg-sprite" aria-hidden="true" focusable="false">
+    <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-3.7-3.7"></path></symbol>
+    <symbol id="i-caret" viewBox="0 0 24 24"><path d="M9 10l3 3 3-3"></path></symbol>
+    <symbol id="i-home" viewBox="0 0 24 24"><path d="M4 10.6L12 4l8 6.6"></path><path d="M6 10.2V20h12v-9.8"></path></symbol>
+    <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 7h16"></path><path d="M4 12h16"></path><path d="M4 17h16"></path></symbol>
+    <symbol id="i-close" viewBox="0 0 24 24"><path d="M6 6l12 12"></path><path d="M18 6l-12 12"></path></symbol>
+    <symbol id="i-back" viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"></path></symbol>
+    <symbol id="i-pencil" viewBox="0 0 24 24"><path d="M4 20l4.6-1.1 8.8-8.8a2.1 2.1 0 0 0-3-3l-8.8 8.8L4 20z"></path><path d="M13.4 6.6l4 4"></path></symbol>
+    <symbol id="i-folder" viewBox="0 0 24 24"><path d="M4 7a2 2 0 0 1 2-2h3.1l1.9 2H18a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7z"></path></symbol>
+    <symbol id="i-upload" viewBox="0 0 24 24"><path d="M12 16V5"></path><path d="M8 9l4-4 4 4"></path><path d="M5 17v2h14v-2"></path></symbol>
+    <symbol id="i-reset" viewBox="0 0 24 24"><path d="M4 5v5h5"></path><path d="M5.4 14a8 8 0 1 0 1.4-7.7L4 10"></path></symbol>
+    <symbol id="i-image" viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="14" rx="2"></rect><circle cx="9" cy="10" r="1.4"></circle><path d="M5.6 17l4.1-4.1 3 3 2.2-2.2 3.5 3.5"></path></symbol>
+    <symbol id="i-link" viewBox="0 0 24 24"><path d="M14 5h5v5"></path><path d="M19 5l-8 8"></path><path d="M17 14v5H5V7h5"></path></symbol>
+  </svg>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>

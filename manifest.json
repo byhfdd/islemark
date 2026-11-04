@@ -1,0 +1,21 @@
+{
+  "manifest_version": 3,
+  "name": "书签新标签页 · Bookmark Start",
+  "version": "1.0.0",
+  "description": "把浏览器收藏夹变成漂亮的起始页：自动读取书签、分类磁贴、快捷搜索、可自由调节的布局与壁纸。",
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "chrome_url_overrides": {
+    "newtab": "newtab.html"
+  },
+  "permissions": ["bookmarks", "storage", "unlimitedStorage", "favicon"],
+  "background": {
+    "service_worker": "service-worker.js"
+  },
+  "action": {
+    "default_title": "打开书签新标签页"
+  }
+}

@@ -1,0 +1,286 @@
+import { BACKGROUND_PRESETS, QUOTES } from './constants.js';
+import { loadSettings, saveSettings, loadWallpaper, saveWallpaper, clearWallpaper, cloneSettings } from './store.js';
+import { fetchTiles } from './bookmarks.js';
+import { createGrid } from './grid.js';
+import { createFolderPanel } from './folder-panel.js';
+import { createSearch } from './search.js';
+import { createSettingsPanel } from './settings-panel.js';
+import { debounce, isExtension } from './util.js';
+
+const state = {
+  settings: null,
+  wallpaper: null,
+  tiles: [],
+};
+
+const dom = {
+  page: document.querySelector('.page'),
+  bg: document.getElementById('bg'),
+  bgDim: document.getElementById('bgDim'),
+  searchArea: document.getElementById('searchArea'),
+  gridViewport: document.getElementById('gridViewport'),
+  gridTrack: document.getElementById('gridTrack'),
+  dots: document.getElementById('dots'),
+  empty: document.getElementById('emptyState'),
+  emptyTitle: document.querySelector('.empty-title'),
+  emptyDesc: document.querySelector('.empty-desc'),
+  emptyRefresh: document.getElementById('emptyRefresh'),
+  clockBlock: document.getElementById('clockBlock'),
+  clockLine: document.getElementById('clockLine'),
+  clockTime: document.getElementById('clockTime'),
+  clockDate: document.getElementById('clockDate'),
+  clockQuote: document.getElementById('clockQuote'),
+  homeBtn: document.getElementById('homeBtn'),
+  menuBtn: document.getElementById('menuBtn'),
+};
+
+const grid = createGrid({
+  viewport: dom.gridViewport,
+  track: dom.gridTrack,
+  onOpen: (tile) => {
+    search.closeMenus();
+    if (tile.type === 'folder') {
+      const anchor = state.settings.search.hidden ? document.querySelector('.topbar') : dom.searchArea;
+      folderPanel.open(tile, anchor.getBoundingClientRect());
+    } else {
+      openUrl(tile.url);
+    }
+  },
+});
+
+const folderPanel = createFolderPanel({ onOpen: (tile) => openUrl(tile.url) });
+
+let search = null;
+let settingsPanel = null;
+
+function openUrl(url) {
+  if (!url) return;
+  if (state.settings.features.openInNewTab && isExtension()) {
+    chrome.tabs.create({ url });
+    return;
+  }
+  window.location.href = url;
+}
+
+function applyFont() {
+  const root = document.documentElement;
+  root.style.setProperty('--font-size', `${state.settings.font.size}px`);
+  root.style.setProperty('--font-color', state.settings.font.color);
+  root.style.setProperty('--label-shadow', state.settings.font.shadow ? '0 1px 6px rgba(0,0,0,.55)' : 'none');
+}
+
+function applySearchState() {
+  document.body.classList.toggle('no-search', state.settings.search.hidden);
+  if (search) search.sync();
+}
+
+function applyBackground() {
+  const config = state.settings.background;
+  const bg = dom.bg;
+  if (config.type === 'image' && state.wallpaper) {
+    bg.style.backgroundImage = `url("${state.wallpaper}")`;
+    bg.style.backgroundColor = '#000';
+  } else if (config.type === 'color') {
+    bg.style.backgroundImage = 'none';
+    bg.style.backgroundColor = config.color;
+  } else {
+    const preset = BACKGROUND_PRESETS.find((item) => item.id === config.preset) || BACKGROUND_PRESETS[0];
+    bg.style.backgroundImage = 'none';
+    bg.style.background = preset.css;
+  }
+  bg.style.filter = config.blur > 0 ? `blur(${config.blur}px)` : 'none';
+  bg.style.transform = config.blur > 0 ? 'scale(1.06)' : 'none';
+  dom.bgDim.style.opacity = String(config.dim / 100);
+}
+
+const WEEKDAYS = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'];
+
+function updateClock() {
+  const now = new Date();
+  const hours = String(now.getHours()).padStart(2, '0');
+  const minutes = String(now.getMinutes()).padStart(2, '0');
+  dom.clockTime.textContent = `${hours}:${minutes}`;
+  dom.clockDate.textContent = `${now.getMonth() + 1}月${now.getDate()}日 ${WEEKDAYS[now.getDay()]}`;
+  const dayIndex = Math.floor(now.getTime() / 86400000) % QUOTES.length;
+  dom.clockQuote.textContent = QUOTES[dayIndex];
+}
+
+function applyClock() {
+  const { clock, quote } = state.settings.features;
+  dom.clockBlock.hidden = !clock && !quote;
+  dom.clockLine.hidden = !clock;
+  dom.clockQuote.hidden = !quote;
+  if (clock || quote) updateClock();
+}
+
+function renderDots(pages, current) {
+  dom.dots.hidden = pages <= 1;
+  dom.dots.replaceChildren();
+  for (let i = 0; i < pages; i += 1) {
+    const dot = document.createElement('button');
+    dot.type = 'button';
+    dot.className = i === current ? 'dot active' : 'dot';
+    dot.title = `第 ${i + 1} 页`;
+    dot.addEventListener('click', () => grid.setPage(i));
+    dom.dots.appendChild(dot);
+  }
+}
+
+function updateEmpty(query) {
+  const hasTiles = grid.getVisibleCount() > 0;
+  dom.empty.hidden = hasTiles;
+  dom.gridViewport.hidden = !hasTiles;
+
+  if (hasTiles) return;
+  const trimmed = String(query || '').trim();
+  if (trimmed) {
+    dom.emptyTitle.textContent = '没有匹配的书签';
+    dom.emptyDesc.textContent = '换个关键词试试，或直接回车搜索网页。';
+    dom.emptyRefresh.hidden = true;
+  } else {
+    dom.emptyTitle.textContent = '还没有可展示的书签';
+    dom.emptyDesc.textContent = '把常用网站加入浏览器书签栏，或收藏到书签文件夹里，这里会自动出现。';
+    dom.emptyRefresh.hidden = false;
+  }
+}
+
+async function refreshBookmarks() {
+  const tiles = await fetchTiles({ includeOther: state.settings.features.showOtherBookmarks });
+  state.tiles = tiles;
+  folderPanel.close();
+  grid.setData(tiles);
+  updateEmpty('');
+}
+
+function applyAll() {
+  applyFont();
+  applySearchState();
+  applyBackground();
+  applyClock();
+  grid.setSettings(state.settings);
+}
+
+let lastShowOther = null;
+
+function onSettingsChange() {
+  applyFont();
+  applySearchState();
+  applyBackground();
+  applyClock();
+  grid.setSettings(state.settings);
+  updateEmpty('');
+  saveSettings(state.settings);
+
+  const showOther = state.settings.features.showOtherBookmarks;
+  if (lastShowOther !== null && lastShowOther !== showOther) {
+    lastShowOther = showOther;
+    refreshBookmarks();
+  }
+}
+
+async function onWallpaperChange(dataUrl) {
+  state.wallpaper = dataUrl;
+  state.settings.background.type = 'image';
+  await saveWallpaper(dataUrl);
+  applyBackground();
+  saveSettings(state.settings);
+}
+
+async function onRemoveWallpaper() {
+  state.wallpaper = null;
+  if (state.settings.background.type === 'image') state.settings.background.type = 'preset';
+  await clearWallpaper();
+  applyBackground();
+  saveSettings(state.settings);
+}
+
+async function onReset() {
+  const defaults = cloneSettings();
+  Object.keys(state.settings).forEach((key) => delete state.settings[key]);
+  Object.assign(state.settings, defaults);
+  await onRemoveWallpaper();
+  applyAll();
+  updateEmpty('');
+  saveSettings(state.settings);
+  if (search) search.sync();
+  lastShowOther = state.settings.features.showOtherBookmarks;
+  refreshBookmarks();
+}
+
+async function init() {
+  state.settings = await loadSettings();
+  state.wallpaper = await loadWallpaper();
+  lastShowOther = state.settings.features.showOtherBookmarks;
+
+  search = createSearch({
+    getTiles: () => state.tiles,
+    getSettings: () => state.settings,
+    onQuery: (query) => {
+      grid.setFilter(query);
+      updateEmpty(query);
+    },
+    onOpen: (url) => openUrl(url),
+    onEngineChange: () => saveSettings(state.settings),
+  });
+
+  settingsPanel = createSettingsPanel({
+    getSettings: () => state.settings,
+    onChange: onSettingsChange,
+    onReset,
+    onWallpaperChange,
+    onRemoveWallpaper,
+  });
+
+  applyAll();
+  grid.onPagesChange(renderDots);
+
+  dom.menuBtn.addEventListener('click', () => settingsPanel.open());
+  dom.homeBtn.addEventListener('click', () => {
+    search.clear();
+    folderPanel.close();
+    refreshBookmarks();
+  });
+  dom.emptyRefresh.addEventListener('click', () => refreshBookmarks());
+
+  await refreshBookmarks();
+  updateEmpty('');
+
+  if (state.settings.search.keepContent) {
+    search.restoreQuery();
+  }
+
+  window.addEventListener(
+    'resize',
+    debounce(() => {
+      grid.refresh();
+      updateEmpty('');
+    }, 200)
+  );
+
+  document.addEventListener('keydown', (event) => {
+    const typing = search.isTyping();
+    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
+      event.preventDefault();
+      if (!state.settings.search.hidden) search.focus();
+      return;
+    }
+    if (!typing && !folderPanel.isOpen() && !event.ctrlKey && !event.metaKey) {
+      if (event.key === 'ArrowRight') grid.stepPage(1);
+      if (event.key === 'ArrowLeft') grid.stepPage(-1);
+    }
+  });
+
+  if (isExtension()) {
+    const reload = debounce(() => refreshBookmarks(), 350);
+    ['onCreated', 'onRemoved', 'onChanged', 'onMoved', 'onChildrenReordered'].forEach((name) => {
+      if (chrome.bookmarks[name]) chrome.bookmarks[name].addListener(reload);
+    });
+  }
+
+  updateClock();
+  setInterval(updateClock, 20000);
+
+  dom.page.classList.add('ready');
+}
+
+init();
