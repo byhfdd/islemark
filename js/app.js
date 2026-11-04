@@ -46,11 +46,13 @@ const grid = createGrid({
       openUrl(tile.url);
     }
   },
+  onReorder: () => refreshBookmarks(),
 });
 
 const folderPanel = createFolderPanel({
   onOpen: (tile) => openUrl(tile.url),
   getIconMode: () => state.settings.features.iconMode,
+  onReorder: () => refreshBookmarks(),
 });
 
 let search = null;
@@ -58,6 +60,10 @@ let settingsPanel = null;
 
 function openUrl(url) {
   if (!url) return;
+  if (/^chrome:\/\//i.test(url)) {
+    if (isExtension()) chrome.tabs.create({ url });
+    return;
+  }
   if (state.settings.features.openInNewTab && isExtension()) {
     chrome.tabs.create({ url });
     return;
@@ -75,6 +81,12 @@ function applyFont() {
 function applySearchState() {
   document.body.classList.toggle('no-search', state.settings.search.hidden);
   if (search) search.sync();
+}
+
+function applyPositions() {
+  const root = document.documentElement;
+  root.style.setProperty('--search-y', `${state.settings.search.offsetY}vh`);
+  root.style.setProperty('--folder-y', `${state.settings.layout.folderY}vh`);
 }
 
 function applyBackground() {
@@ -156,7 +168,10 @@ function updateEmpty(query) {
 }
 
 async function refreshBookmarks() {
-  const tiles = await fetchTiles({ includeOther: state.settings.features.showOtherBookmarks });
+  const tiles = await fetchTiles({
+    includeOther: state.settings.features.showOtherBookmarks,
+    includeSystem: state.settings.features.systemShortcuts,
+  });
   state.tiles = tiles;
   folderPanel.close();
   grid.setData(tiles);
@@ -166,16 +181,19 @@ async function refreshBookmarks() {
 function applyAll() {
   applyFont();
   applySearchState();
+  applyPositions();
   applyBackground();
   applyClock();
   grid.setSettings(state.settings);
 }
 
 let lastShowOther = null;
+let lastSystemShortcuts = null;
 
 function onSettingsChange() {
   applyFont();
   applySearchState();
+  applyPositions();
   applyBackground();
   applyClock();
   grid.setSettings(state.settings);
@@ -183,8 +201,13 @@ function onSettingsChange() {
   saveSettings(state.settings);
 
   const showOther = state.settings.features.showOtherBookmarks;
-  if (lastShowOther !== null && lastShowOther !== showOther) {
+  const systemShortcuts = state.settings.features.systemShortcuts;
+  if (
+    (lastShowOther !== null && lastShowOther !== showOther) ||
+    (lastSystemShortcuts !== null && lastSystemShortcuts !== systemShortcuts)
+  ) {
     lastShowOther = showOther;
+    lastSystemShortcuts = systemShortcuts;
     refreshBookmarks();
   }
 }
@@ -215,6 +238,7 @@ async function onReset() {
   saveSettings(state.settings);
   if (search) search.sync();
   lastShowOther = state.settings.features.showOtherBookmarks;
+  lastSystemShortcuts = state.settings.features.systemShortcuts;
   refreshBookmarks();
 }
 
@@ -241,6 +265,7 @@ async function init() {
   state.settings = await loadSettings();
   state.wallpaper = await loadWallpaper();
   lastShowOther = state.settings.features.showOtherBookmarks;
+  lastSystemShortcuts = state.settings.features.systemShortcuts;
 
   search = createSearch({
     getTiles: () => state.tiles,

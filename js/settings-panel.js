@@ -219,6 +219,13 @@ export function createSettingsPanel({ getSettings, onChange, onReset, onWallpape
         set: (v) => { settings.layout.opacity = v; },
       })
     );
+    inner.appendChild(
+      createSlider({
+        label: '文件夹垂直位置', min: -20, max: 20, step: 1, unit: 'vh',
+        get: () => settings.layout.folderY,
+        set: (v) => { settings.layout.folderY = v; },
+      })
+    );
   }
 
   function buildSearchSection() {
@@ -233,6 +240,13 @@ export function createSettingsPanel({ getSettings, onChange, onReset, onWallpape
         label: '搜索框大小', min: 80, max: 200, step: 5, unit: '%',
         get: () => settings.search.size,
         set: (v) => { settings.search.size = v; },
+      })
+    );
+    inner.appendChild(
+      createSlider({
+        label: '搜索框距顶部', min: 0, max: 30, step: 1, unit: 'vh',
+        get: () => settings.search.offsetY,
+        set: (v) => { settings.search.offsetY = v; },
       })
     );
   }
@@ -530,6 +544,11 @@ export function createSettingsPanel({ getSettings, onChange, onReset, onWallpape
     const inner = createSection('其他');
     inner.appendChild(createToggle('显示时钟与日期', null, () => settings.features.clock, (v) => { settings.features.clock = v; }));
     inner.appendChild(createToggle('显示每日一言', null, () => settings.features.quote, (v) => { settings.features.quote = v; }));
+    inner.appendChild(
+      createToggle('显示系统快捷方式', '包含历史记录、下载、密码、扩展、收藏夹和设置', () => settings.features.systemShortcuts, (v) => {
+        settings.features.systemShortcuts = v;
+      })
+    );
     inner.appendChild(
       createTextarea({
         label: '每日一言内容',

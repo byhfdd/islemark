@@ -74,7 +74,7 @@ body {
 .stage {
   width: 100%;
   max-width: 1440px;
-  padding: clamp(26px, 6.5vh, 70px) 32px 40px;
+  padding: var(--search-y, 7vh) 32px 40px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -143,6 +143,10 @@ body.no-search .topbar {
 
 body.no-search .search-area {
   display: none;
+}
+
+body.no-search .stage {
+  padding-top: 32px;
 }
 
 .search-area {
@@ -512,6 +516,27 @@ body.hide-engine .search-shell {
   object-fit: contain;
 }
 
+.tile-icon.system {
+  background: #fff;
+}
+
+.tile-icon.system > .icon {
+  width: 52%;
+  height: 52%;
+  color: #1d1d1f;
+  stroke-width: 1.8;
+}
+
+.tile.dragging {
+  opacity: 0.4;
+}
+
+.tile.drop-target .tile-icon {
+  transform: translateY(-3px) scale(1.06);
+  background: rgba(255, 255, 255, 0.3);
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.78), 0 16px 32px rgba(0, 0, 0, 0.3);
+}
+
 .tile.is-folder .tile-icon {
   background: rgba(255, 255, 255, 0.19);
   backdrop-filter: blur(10px);
@@ -533,6 +558,13 @@ body.hide-engine .search-shell {
   overflow: hidden;
   border-radius: calc(var(--icon-size) * 0.075);
   background: #fff;
+}
+
+.folder-preview .mini > .icon {
+  width: 70%;
+  height: 70%;
+  color: #1d1d1f;
+  stroke-width: 1.8;
 }
 
 .folder-preview .mini.empty {
@@ -697,7 +729,7 @@ body.hide-engine .search-shell {
   position: fixed;
   z-index: 65;
   left: 50%;
-  top: 50%;
+  top: calc(50% + var(--folder-y, 0vh));
   transform: translate(-50%, -50%);
   width: min(780px, calc(100vw - 32px));
   display: flex;
@@ -873,6 +905,22 @@ body.hide-engine .search-shell {
   stroke-width: 1.5;
 }
 
+.fp-icon.is-system > .icon {
+  width: 27px;
+  height: 27px;
+  color: #1d1d1f;
+  stroke-width: 1.8;
+}
+
+.fp-item.dragging {
+  opacity: 0.4;
+}
+
+.fp-item.drop-target .fp-icon {
+  transform: translateY(-2px) scale(1.05);
+  box-shadow: 0 0 0 3px rgba(29, 29, 31, 0.25), 0 10px 20px rgba(0, 0, 0, 0.18);
+}
+
 .fp-label {
   max-width: 92px;
   font-size: 12.5px;
@@ -900,7 +948,7 @@ body.hide-engine .search-shell {
 
 @media (max-width: 720px) {
   .stage {
-    padding: 32px 16px 32px;
+    padding: var(--search-y, 7vh) 16px 32px;
   }
 
   .clock-block {

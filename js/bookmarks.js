@@ -93,35 +93,87 @@ const DEMO_TILES = [
   { type: 'bookmark', id: 'demo-32', title: 'GitHub', url: 'https://github.com' },
 ];
 
+const SYSTEM_SHORTCUTS = [
+  { id: 'sys-history', title: '历史记录', url: 'chrome://history/', sym: 'i-history' },
+  { id: 'sys-downloads', title: '下载', url: 'chrome://downloads/', sym: 'i-download' },
+  { id: 'sys-passwords', title: '密码', url: 'chrome://password-manager/passwords', sym: 'i-key' },
+  { id: 'sys-extensions', title: '扩展', url: 'chrome://extensions/', sym: 'i-puzzle' },
+  { id: 'sys-bookmarks', title: '收藏夹', url: 'chrome://bookmarks/', sym: 'i-star' },
+  { id: 'sys-settings', title: '设置', url: 'chrome://settings/', sym: 'i-gear' },
+];
+
 function normalizeTitle(node) {
   const title = (node.title || '').trim();
   if (title) return title;
   return node.url ? hostOf(node.url) : '未命名分组';
 }
 
-function toTile(node) {
+function toTile(node, parentId) {
   if (node.url) {
     return {
       type: 'bookmark',
       id: node.id,
       title: normalizeTitle(node),
       url: node.url,
+      parentId: parentId || node.parentId || '',
+      index: typeof node.index === 'number' ? node.index : 0,
+      system: !!node.system,
     };
   }
   const children = (node.children || [])
     .filter((child) => child.url || (child.children && child.children.length))
-    .map(toTile);
+    .map((child) => toTile(child, node.id));
   return {
     type: 'folder',
     id: node.id,
     title: normalizeTitle(node),
     children,
+    parentId: parentId || node.parentId || '',
+    index: typeof node.index === 'number' ? node.index : 0,
+    system: !!node.system,
+    fixed: !!node.fixed,
+  };
+}
+
+/** 真实的 Chrome 书签移动；索引用于改变同级顺序 */
+export async function moveBookmarkNode(id, { parentId, index } = {}) {
+  if (!isExtension() || !id) return false;
+  try {
+    const props = {};
+    if (parentId) props.parentId = parentId;
+    if (typeof index === 'number' && index >= 0) props.index = index;
+    await chrome.bookmarks.move(id, props);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function buildSystemTile() {
+  return {
+    type: 'folder',
+    id: 'system-shortcuts',
+    title: '系统',
+    system: true,
+    fixed: true,
+    parentId: '',
+    index: 0,
+    children: SYSTEM_SHORTCUTS.map((item, index) => ({
+      type: 'bookmark',
+      id: item.id,
+      title: item.title,
+      url: item.url,
+      sym: item.sym,
+      system: true,
+      parentId: 'system-shortcuts',
+      index,
+    })),
   };
 }
 
 /** 读取书签树，书签栏与“其他书签”顶层条目各自成为磁贴 */
-export async function fetchTiles({ includeOther = true } = {}) {
-  if (!isExtension()) return DEMO_TILES;
+export async function fetchTiles({ includeOther = true, includeSystem = true } = {}) {
+  if (!isExtension()) return includeSystem ? [...DEMO_TILES, buildSystemTile()] : DEMO_TILES;
 
   let tree = [];
   try {
@@ -149,11 +201,18 @@ export async function fetchTiles({ includeOther = true } = {}) {
         type: 'folder',
         id: other.id,
         title: other.title || '其他书签',
+        fixed: true,
+        parentId: other.parentId || '',
+        index: typeof other.index === 'number' ? other.index : 0,
         children: other.children
           .filter((child) => child.url || (child.children && child.children.length))
-          .map(toTile),
+          .map((child) => toTile(child, other.id)),
       });
     }
+  }
+
+  if (includeSystem) {
+    tiles.push(buildSystemTile());
   }
 
   return tiles;

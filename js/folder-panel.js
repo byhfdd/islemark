@@ -1,10 +1,11 @@
 import { el, faviconImg, svgIcon } from './util.js';
+import { moveBookmarkNode } from './bookmarks.js';
 
 const ITEM_WIDTH = 92;
 const ROW_HEIGHT = 116;
 const PANEL_CHROME = 150;
 
-export function createFolderPanel({ onOpen, getIconMode }) {
+export function createFolderPanel({ onOpen, getIconMode, onReorder }) {
   const panel = document.getElementById('folderPanel');
   const scrim = document.getElementById('folderScrim');
   const titleEl = document.getElementById('folderTitle');
@@ -21,14 +22,43 @@ export function createFolderPanel({ onOpen, getIconMode }) {
   let pages = 1;
   let capacity = 12;
   let skipClick = false;
+  let dragPayload = null;
 
   function iconMode() {
     return (getIconMode && getIconMode()) || 'favicon';
   }
 
-  /** 弹层固定在屏幕中央，只限制最大高度 */
+  function clearItemDrops() {
+    bodyEl.querySelectorAll('.fp-item.drop-target').forEach((node) => node.classList.remove('drop-target'));
+  }
+
+  function targetFor(child, ratio) {
+    const payload = dragPayload;
+    if (!payload || child.system || child.fixed || payload.id === child.id) return null;
+    if (child.type === 'folder' && ratio > 0.22 && ratio < 0.78) {
+      return { parentId: child.id };
+    }
+    const after = ratio >= 0.5;
+    const base = (typeof child.index === 'number' ? child.index : 0) + (after ? 1 : 0);
+    const adjust = payload.parentId === child.parentId && payload.index < base ? 1 : 0;
+    return { parentId: child.parentId, index: base - adjust };
+  }
+
+  async function commitFolderDrop(id, target) {
+    if (!id || !target || !target.parentId) return;
+    const ok = await moveBookmarkNode(id, target);
+    clearItemDrops();
+    dragPayload = null;
+    if (!ok) return;
+    close();
+    if (onReorder) await onReorder();
+  }
+
+  /** 弹层固定在屏幕中央，只限制最大高度；偏移越大，可用高度越小 */
   function place() {
-    const maxHeight = Math.max(260, Math.min(window.innerHeight * 0.78, window.innerHeight - 56));
+    const offsetVh = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--folder-y')) || 0;
+    const shift = (Math.abs(offsetVh) * window.innerHeight) / 100;
+    const maxHeight = Math.max(240, Math.min(window.innerHeight * 0.78, window.innerHeight - 56 - shift * 2));
     panel.style.maxHeight = `${maxHeight}px`;
   }
 
@@ -76,9 +106,14 @@ export function createFolderPanel({ onOpen, getIconMode }) {
       btn.title = child.title;
 
       const icon = el('div', child.type === 'folder' ? 'fp-icon is-folder' : 'fp-icon');
-      icon.appendChild(
-        child.type === 'folder' ? svgIcon('i-folder') : faviconImg(child.url, child.title, iconMode())
-      );
+      if (child.sym) {
+        icon.classList.add('is-system');
+        icon.appendChild(svgIcon(child.sym));
+      } else {
+        icon.appendChild(
+          child.type === 'folder' ? svgIcon('i-folder') : faviconImg(child.url, child.title, iconMode())
+        );
+      }
 
       const label = el('span', 'fp-label', child.title);
       btn.append(icon, label);
@@ -93,6 +128,61 @@ export function createFolderPanel({ onOpen, getIconMode }) {
           onOpen(child);
         }
       });
+
+      if (!child.system && !child.fixed) {
+        btn.draggable = true;
+        btn.addEventListener('dragstart', (event) => {
+          dragPayload = {
+            id: child.id,
+            type: child.type,
+            parentId: child.parentId || '',
+            index: typeof child.index === 'number' ? child.index : 0,
+          };
+          btn.classList.add('dragging');
+          if (event.dataTransfer) {
+            event.dataTransfer.effectAllowed = 'move';
+            try {
+              event.dataTransfer.setData('text/plain', JSON.stringify(dragPayload));
+            } catch {
+              /* 忽略剪贴板限制 */
+            }
+          }
+        });
+        btn.addEventListener('dragend', () => {
+          btn.classList.remove('dragging');
+          clearItemDrops();
+          dragPayload = null;
+          skipClick = true;
+          setTimeout(() => { skipClick = false; }, 0);
+        });
+        btn.addEventListener('dragover', (event) => {
+          if (!dragPayload) return;
+          const rect = btn.getBoundingClientRect();
+          const ratio = (event.clientX - rect.left) / (rect.width || 1);
+          if (!targetFor(child, ratio)) return;
+          event.preventDefault();
+          event.stopPropagation();
+          if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
+          btn.classList.add('drop-target');
+        });
+        btn.addEventListener('dragleave', (event) => {
+          if (btn.contains(event.relatedTarget)) return;
+          btn.classList.remove('drop-target');
+        });
+        btn.addEventListener('drop', (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          const rect = btn.getBoundingClientRect();
+          const ratio = (event.clientX - rect.left) / (rect.width || 1);
+          const payload = dragPayload;
+          btn.classList.remove('drop-target');
+          if (!payload) return;
+          const target = targetFor(child, ratio);
+          if (!target) return;
+          commitFolderDrop(payload.id, target);
+        });
+      }
+
       bodyEl.appendChild(btn);
     });
 
@@ -138,6 +228,19 @@ export function createFolderPanel({ onOpen, getIconMode }) {
     render();
   });
 
+  // 拖到弹层外部：移出当前文件夹，放到书签栏末尾
+  scrim.addEventListener('dragover', (event) => {
+    if (!dragPayload) return;
+    event.preventDefault();
+    if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
+  });
+  scrim.addEventListener('drop', (event) => {
+    if (!dragPayload) return;
+    event.preventDefault();
+    const id = dragPayload.id;
+    commitFolderDrop(id, { parentId: '1' });
+  });
+
   // ---------- 鼠标 / 触摸拖拽翻页 ----------
   const DRAG_LIMIT = 10;
   const SWIPE_THRESHOLD = 50;
@@ -172,6 +275,7 @@ export function createFolderPanel({ onOpen, getIconMode }) {
 
   bodyEl.addEventListener('pointerdown', (event) => {
     if (pages <= 1 || event.button !== 0) return;
+    if (event.target.closest('.fp-item')) return;
     swipe = { x: event.clientX, y: event.clientY, dx: 0, moved: false, pointerId: event.pointerId };
     bodyEl.style.transition = 'none';
   });

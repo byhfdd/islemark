@@ -49,6 +49,7 @@ export const DEFAULT_SETTINGS = {
     iconSize: 100,
     radius: 25,
     opacity: 100,
+    folderY: 0,
   },
   search: {
     hidden: false,
@@ -57,6 +58,7 @@ export const DEFAULT_SETTINGS = {
     hideCategory: false,
     hideButton: false,
     size: 150,
+    offsetY: 7,
   },
   font: {
     shadow: false,
@@ -77,6 +79,7 @@ export const DEFAULT_SETTINGS = {
     showOtherBookmarks: true,
     iconMode: 'favicon',
     quotes: [],
+    systemShortcuts: true,
   },
   engine: 'bing',
   engines: cloneEngineDefs(),

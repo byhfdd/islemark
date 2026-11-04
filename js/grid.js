@@ -1,10 +1,10 @@
-import { el, faviconImg } from './util.js';
-import { filterTiles, previewBookmarks } from './bookmarks.js';
+import { el, faviconImg, svgIcon } from './util.js';
+import { filterTiles, previewBookmarks, moveBookmarkNode } from './bookmarks.js';
 
 const BASE_ICON = 76;
 const LABEL_GAP = 8;
 
-export function createGrid({ viewport, track, onOpen }) {
+export function createGrid({ viewport, track, onOpen, onReorder }) {
   let allTiles = [];
   let visibleTiles = [];
   let settings = null;
@@ -12,9 +12,34 @@ export function createGrid({ viewport, track, onOpen }) {
   let pageCount = 1;
   let pagesListener = null;
   let suppressClick = false;
+  let dragPayload = null;
 
   function iconMode() {
     return (settings && settings.features && settings.features.iconMode) || 'favicon';
+  }
+
+  function clearDropTargets() {
+    track.querySelectorAll('.tile.drop-target').forEach((node) => node.classList.remove('drop-target'));
+  }
+
+  /** 计算落点：文件夹中部→放入，边缘/普通磁贴→同级排序 */
+  function dropTargetFor(tile, ratio) {
+    const payload = dragPayload;
+    if (!payload || tile.fixed || tile.system || payload.id === tile.id) return null;
+    if (tile.type === 'folder' && ratio > 0.22 && ratio < 0.78) {
+      return { parentId: tile.id };
+    }
+    const after = ratio >= 0.5;
+    const base = (typeof tile.index === 'number' ? tile.index : 0) + (after ? 1 : 0);
+    const adjust = payload.parentId === tile.parentId && payload.index < base ? 1 : 0;
+    return { parentId: tile.parentId, index: base - adjust };
+  }
+
+  async function commitDrop(id, target) {
+    if (!id || !target || !target.parentId) return;
+    const ok = await moveBookmarkNode(id, target);
+    clearDropTargets();
+    if (ok && onReorder) await onReorder();
   }
 
   function applyLayout() {
@@ -62,12 +87,19 @@ export function createGrid({ viewport, track, onOpen }) {
     btn.title = tile.title;
 
     const icon = el('div', 'tile-icon');
-    if (tile.type === 'folder') {
+    if (tile.sym) {
+      icon.classList.add('system');
+      icon.appendChild(svgIcon(tile.sym));
+    } else if (tile.type === 'folder') {
       const preview = el('div', 'folder-preview');
       const items = previewBookmarks(tile.children, 4);
       for (let i = 0; i < 4; i += 1) {
         const cell = el('div', items[i] ? 'mini' : 'mini empty');
-        if (items[i]) cell.appendChild(faviconImg(items[i].url, items[i].title, iconMode()));
+        if (items[i]) {
+          cell.appendChild(
+            items[i].sym ? svgIcon(items[i].sym) : faviconImg(items[i].url, items[i].title, iconMode())
+          );
+        }
         preview.appendChild(cell);
       }
       icon.appendChild(preview);
@@ -77,6 +109,61 @@ export function createGrid({ viewport, track, onOpen }) {
 
     const label = el('span', 'tile-label', tile.title);
     btn.append(icon, label);
+
+    if (!tile.fixed && !tile.system) {
+      btn.draggable = true;
+      btn.addEventListener('dragstart', (event) => {
+        dragPayload = {
+          id: tile.id,
+          type: tile.type,
+          parentId: tile.parentId || '',
+          index: typeof tile.index === 'number' ? tile.index : 0,
+        };
+        btn.classList.add('dragging');
+        if (event.dataTransfer) {
+          event.dataTransfer.effectAllowed = 'move';
+          try {
+            event.dataTransfer.setData('text/plain', JSON.stringify(dragPayload));
+          } catch {
+            /* 忽略剪贴板限制 */
+          }
+        }
+      });
+      btn.addEventListener('dragend', () => {
+        btn.classList.remove('dragging');
+        clearDropTargets();
+        dragPayload = null;
+        suppressClick = true;
+        setTimeout(() => { suppressClick = false; }, 0);
+      });
+      btn.addEventListener('dragover', (event) => {
+        if (!dragPayload) return;
+        const rect = btn.getBoundingClientRect();
+        const ratio = (event.clientX - rect.left) / (rect.width || 1);
+        if (!dropTargetFor(tile, ratio)) return;
+        event.preventDefault();
+        event.stopPropagation();
+        if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
+        btn.classList.add('drop-target');
+      });
+      btn.addEventListener('dragleave', (event) => {
+        if (btn.contains(event.relatedTarget)) return;
+        btn.classList.remove('drop-target');
+      });
+      btn.addEventListener('drop', (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        const rect = btn.getBoundingClientRect();
+        const ratio = (event.clientX - rect.left) / (rect.width || 1);
+        const payload = dragPayload;
+        btn.classList.remove('drop-target');
+        if (!payload) return;
+        const target = dropTargetFor(tile, ratio);
+        if (!target) return;
+        commitDrop(payload.id, target);
+      });
+    }
+
     return btn;
   }
 
@@ -152,6 +239,7 @@ export function createGrid({ viewport, track, onOpen }) {
 
   viewport.addEventListener('pointerdown', (event) => {
     if (pageCount <= 1 || event.button !== 0) return;
+    if (event.target.closest('.tile')) return;
     suppressClick = false;
     drag = { x: event.clientX, y: event.clientY, dx: 0, moved: false, pointerId: event.pointerId };
     track.style.transition = 'none';
@@ -179,6 +267,19 @@ export function createGrid({ viewport, track, onOpen }) {
 
   viewport.addEventListener('pointerup', () => endDrag(false));
   viewport.addEventListener('pointercancel', () => endDrag(true));
+
+  // 拖到空白区域：移到书签栏末尾
+  viewport.addEventListener('dragover', (event) => {
+    if (!dragPayload || event.target.closest('.tile')) return;
+    event.preventDefault();
+    if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
+  });
+  viewport.addEventListener('drop', (event) => {
+    if (!dragPayload || event.target.closest('.tile')) return;
+    event.preventDefault();
+    const id = dragPayload.id;
+    commitDrop(id, { parentId: '1' });
+  });
 
   return {
     setSettings(next) {
