@@ -603,7 +603,7 @@ export function createSettingsPanel({ getSettings, onChange, onReset, onWallpape
       })
     );
 
-    const about = el('div', 'about', '设置保存在当前浏览器中，书签每次打开新标签页时自动同步。');
+    const about = el('div', 'about', '书屿 · 设置保存在当前浏览器中，书签每次打开新标签页时自动同步。');
     inner.appendChild(about);
   }
 
