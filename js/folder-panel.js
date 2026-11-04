@@ -199,6 +199,29 @@ export function createFolderPanel({ onOpen, getIconMode }) {
   bodyEl.addEventListener('pointerup', () => endSwipe(false));
   bodyEl.addEventListener('pointercancel', () => endSwipe(true));
 
+  // ---------- 鼠标滚轮翻页 ----------
+  let wheelLock = 0;
+  panel.addEventListener(
+    'wheel',
+    (event) => {
+      if (!opened || pages <= 1) return;
+      event.preventDefault();
+      const now = Date.now();
+      if (now < wheelLock) return;
+      const raw = Math.abs(event.deltaX) > Math.abs(event.deltaY) ? event.deltaX : event.deltaY;
+      if (Math.abs(raw) < 10) return;
+      wheelLock = now + 360;
+      if (raw > 0 && page < pages - 1) {
+        page += 1;
+        render();
+      } else if (raw < 0 && page > 0) {
+        page -= 1;
+        render();
+      }
+    },
+    { passive: false }
+  );
+
   document.addEventListener('keydown', (event) => {
     if (!opened) return;
     if (event.key === 'Escape') {

@@ -84,17 +84,20 @@ body {
 /* ---------- 时钟 ---------- */
 
 .clock-block {
-  text-align: center;
+  position: fixed;
+  left: clamp(18px, 3vw, 40px);
+  top: clamp(16px, 2.4vh, 26px);
+  z-index: 12;
+  text-align: left;
   color: var(--font-color);
-  margin-bottom: -6px;
   user-select: none;
 }
 
 .clock-line {
   display: flex;
   align-items: baseline;
-  justify-content: center;
-  gap: 12px;
+  justify-content: flex-start;
+  gap: 10px;
 }
 
 .clock-time {
@@ -116,6 +119,10 @@ body {
   opacity: 0.66;
   letter-spacing: 0.03em;
   text-shadow: 0 1px 8px rgba(0, 0, 0, 0.4);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: min(46vw, 460px);
 }
 
 /* ---------- 顶栏 ---------- */
@@ -149,10 +156,10 @@ body.no-search .search-area {
 }
 
 #menuBtn {
-  position: absolute;
-  right: 0;
-  top: 50%;
-  transform: translateY(-50%);
+  position: fixed;
+  right: 22px;
+  top: 18px;
+  z-index: 2;
 }
 
 .search-shell {
@@ -676,7 +683,7 @@ body.hide-engine .search-shell {
 .folder-scrim {
   position: fixed;
   inset: 0;
-  z-index: 40;
+  z-index: 60;
   background: rgba(6, 8, 12, 0.38);
   animation: fadeIn 0.18s ease;
 }
@@ -688,7 +695,7 @@ body.hide-engine .search-shell {
 
 .folder-panel {
   position: fixed;
-  z-index: 45;
+  z-index: 65;
   left: 50%;
   top: 50%;
   transform: translate(-50%, -50%);
@@ -894,6 +901,25 @@ body.hide-engine .search-shell {
 @media (max-width: 720px) {
   .stage {
     padding: 32px 16px 32px;
+  }
+
+  .clock-block {
+    position: static;
+    width: 100%;
+    text-align: center;
+  }
+
+  .clock-line {
+    justify-content: center;
+  }
+
+  .clock-quote {
+    max-width: 100%;
+  }
+
+  #menuBtn {
+    top: 14px;
+    right: 14px;
   }
 
   .search-input {
