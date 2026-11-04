@@ -77,26 +77,9 @@ export function createFolderPanel({ onOpen, getIconMode, getSettings, onReorder 
     if (onReorder) await onReorder(keepOpen);
   }
 
-  /** 弹层顶部跟随搜索框位置，只通过“与搜索框间距”调节两者距离 */
+  /** 弹层固定在屏幕中央显示，只限制最大高度 */
   function place() {
-    const layout = (getSettings && getSettings() && getSettings().layout) || {};
-    const gapVh = Number(layout.folderGap);
-    const gap = (Number.isFinite(gapVh) ? gapVh : 6) * window.innerHeight / 100;
-
-    let anchorBottom;
-    const searchEl = document.getElementById('searchArea');
-    const topbar = document.querySelector('.topbar');
-    if (searchEl && !document.body.classList.contains('no-search')) {
-      anchorBottom = searchEl.getBoundingClientRect().bottom;
-    } else if (topbar) {
-      anchorBottom = topbar.getBoundingClientRect().bottom;
-    } else {
-      anchorBottom = window.innerHeight * 0.2;
-    }
-
-    const top = Math.max(72, Math.round(anchorBottom + gap));
-    panel.style.top = `${top}px`;
-    panel.style.maxHeight = `${Math.max(240, window.innerHeight - top - 24)}px`;
+    panel.style.maxHeight = `${Math.max(200, Math.min(window.innerHeight * 0.78, window.innerHeight - 56))}px`;
   }
 
   /** 列/行数由设置决定；列数决定面板宽度，行数决定每页容量 */

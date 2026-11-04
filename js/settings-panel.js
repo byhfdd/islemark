@@ -221,9 +221,9 @@ export function createSettingsPanel({ getSettings, onChange, onReset, onWallpape
     );
     inner.appendChild(
       createSlider({
-        label: '与搜索框间距', min: -20, max: 40, step: 1, unit: 'vh',
-        get: () => settings.layout.folderGap,
-        set: (v) => { settings.layout.folderGap = v; },
+        label: '文件夹与搜索框间距', min: -4, max: 20, step: 1, unit: 'vh',
+        get: () => settings.layout.gridGap,
+        set: (v) => { settings.layout.gridGap = v; },
       })
     );
     inner.appendChild(

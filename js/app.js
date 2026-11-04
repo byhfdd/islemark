@@ -92,7 +92,7 @@ function applySearchState() {
 function applyPositions() {
   const root = document.documentElement;
   root.style.setProperty('--search-y', `${state.settings.search.offsetY}vh`);
-  if (folderPanel.isOpen()) folderPanel.reflow();
+  root.style.setProperty('--grid-gap', `${state.settings.layout.gridGap}vh`);
 }
 
 function applyBackground() {
