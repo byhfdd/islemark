@@ -1,11 +1,10 @@
 import { el, faviconImg, svgIcon } from './util.js';
-import { filterTiles, previewBookmarks, moveBookmarkNode } from './bookmarks.js';
+import { previewBookmarks, moveBookmarkNode } from './bookmarks.js';
 
 const BASE_ICON = 76;
 const LABEL_GAP = 8;
 
 export function createGrid({ viewport, track, onOpen, onReorder }) {
-  let allTiles = [];
   let visibleTiles = [];
   let settings = null;
   let page = 0;
@@ -171,10 +170,20 @@ export function createGrid({ viewport, track, onOpen, onReorder }) {
     if (pagesListener) pagesListener(pageCount, page);
   }
 
+  /** 统一用 translate3d 走 GPU 合成，避免翻页时整页重排 */
+  function applyTransform(offsetPercent = page * 100) {
+    track.style.transform = `translate3d(-${offsetPercent}%, 0, 0)`;
+  }
+
+  let pagingTimer = 0;
+
   function setPage(index) {
     if (!pageCount) return;
     page = Math.max(0, Math.min(index, pageCount - 1));
-    track.style.transform = `translateX(-${page * 100}%)`;
+    track.classList.add('paging');
+    applyTransform();
+    clearTimeout(pagingTimer);
+    pagingTimer = setTimeout(() => track.classList.remove('paging'), 400);
     emitPages();
   }
 
@@ -186,7 +195,7 @@ export function createGrid({ viewport, track, onOpen, onReorder }) {
 
     track.replaceChildren();
     if (!pageCount) {
-      track.style.transform = 'translateX(0)';
+      applyTransform(0);
       emitPages();
       return;
     }
@@ -198,7 +207,7 @@ export function createGrid({ viewport, track, onOpen, onReorder }) {
         .forEach((tile) => pageEl.appendChild(buildTile(tile)));
       track.appendChild(pageEl);
     }
-    track.style.transform = `translateX(-${page * 100}%)`;
+    applyTransform();
     emitPages();
   }
 
@@ -227,7 +236,7 @@ export function createGrid({ viewport, track, onOpen, onReorder }) {
     }
     track.style.transition = '';
     if (cancelled || !moved) {
-      track.style.transform = `translateX(-${page * 100}%)`;
+      applyTransform();
       return;
     }
     suppressClick = true;
@@ -262,7 +271,7 @@ export function createGrid({ viewport, track, onOpen, onReorder }) {
     if (event.cancelable) event.preventDefault();
     drag.dx = dx;
     const base = -page * (viewport.clientWidth || 0);
-    track.style.transform = `translateX(${base + dx}px)`;
+    track.style.transform = `translate3d(${base + dx}px, 0, 0)`;
   });
 
   viewport.addEventListener('pointerup', () => endDrag(false));
@@ -288,13 +297,7 @@ export function createGrid({ viewport, track, onOpen, onReorder }) {
       render();
     },
     setData(tiles) {
-      allTiles = tiles || [];
-      visibleTiles = allTiles;
-      page = 0;
-      render();
-    },
-    setFilter(query) {
-      visibleTiles = filterTiles(allTiles, query);
+      visibleTiles = tiles || [];
       page = 0;
       render();
     },

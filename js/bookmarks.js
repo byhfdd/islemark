@@ -93,15 +93,6 @@ const DEMO_TILES = [
   { type: 'bookmark', id: 'demo-32', title: 'GitHub', url: 'https://github.com' },
 ];
 
-const SYSTEM_SHORTCUTS = [
-  { id: 'sys-history', title: '历史记录', url: 'chrome://history/', sym: 'i-history' },
-  { id: 'sys-downloads', title: '下载', url: 'chrome://downloads/', sym: 'i-download' },
-  { id: 'sys-passwords', title: '密码', url: 'chrome://password-manager/passwords', sym: 'i-key' },
-  { id: 'sys-extensions', title: '扩展', url: 'chrome://extensions/', sym: 'i-puzzle' },
-  { id: 'sys-bookmarks', title: '收藏夹', url: 'chrome://bookmarks/', sym: 'i-star' },
-  { id: 'sys-settings', title: '设置', url: 'chrome://settings/', sym: 'i-gear' },
-];
-
 function normalizeTitle(node) {
   const title = (node.title || '').trim();
   if (title) return title;
@@ -117,7 +108,6 @@ function toTile(node, parentId) {
       url: node.url,
       parentId: parentId || node.parentId || '',
       index: typeof node.index === 'number' ? node.index : 0,
-      system: !!node.system,
     };
   }
   const children = (node.children || [])
@@ -130,7 +120,6 @@ function toTile(node, parentId) {
     children,
     parentId: parentId || node.parentId || '',
     index: typeof node.index === 'number' ? node.index : 0,
-    system: !!node.system,
     fixed: !!node.fixed,
   };
 }
@@ -149,31 +138,9 @@ export async function moveBookmarkNode(id, { parentId, index } = {}) {
   }
 }
 
-function buildSystemTile() {
-  return {
-    type: 'folder',
-    id: 'system-shortcuts',
-    title: '系统',
-    system: true,
-    fixed: true,
-    parentId: '',
-    index: 0,
-    children: SYSTEM_SHORTCUTS.map((item, index) => ({
-      type: 'bookmark',
-      id: item.id,
-      title: item.title,
-      url: item.url,
-      sym: item.sym,
-      system: true,
-      parentId: 'system-shortcuts',
-      index,
-    })),
-  };
-}
-
 /** 读取书签树，书签栏与“其他书签”顶层条目各自成为磁贴 */
-export async function fetchTiles({ includeOther = true, includeSystem = true } = {}) {
-  if (!isExtension()) return includeSystem ? [...DEMO_TILES, buildSystemTile()] : DEMO_TILES;
+export async function fetchTiles({ includeOther = true } = {}) {
+  if (!isExtension()) return DEMO_TILES;
 
   let tree = [];
   try {
@@ -211,10 +178,6 @@ export async function fetchTiles({ includeOther = true, includeSystem = true } =
     }
   }
 
-  if (includeSystem) {
-    tiles.push(buildSystemTile());
-  }
-
   return tiles;
 }
 
@@ -233,24 +196,6 @@ export function previewBookmarks(tiles, max = 4) {
 
 function matches(text, query) {
   return String(text || '').toLowerCase().includes(query);
-}
-
-function folderMatches(folder, query) {
-  if (matches(folder.title, query)) return true;
-  return (folder.children || []).some((child) =>
-    child.type === 'folder'
-      ? folderMatches(child, query)
-      : matches(child.title, query) || matches(child.url, query)
-  );
-}
-
-/** 顶栏输入时过滤磁贴：书签命中或文件夹内有命中都会保留 */
-export function filterTiles(tiles, rawQuery) {
-  const query = String(rawQuery || '').trim().toLowerCase();
-  if (!query) return tiles;
-  return tiles.filter((tile) =>
-    tile.type === 'folder' ? folderMatches(tile, query) : matches(tile.title, query) || matches(tile.url, query)
-  );
 }
 
 /** 搜索建议：展开所有层级的书签 */

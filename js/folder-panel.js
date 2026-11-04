@@ -10,6 +10,7 @@ export function createFolderPanel({ onOpen, getIconMode, onReorder }) {
   const scrim = document.getElementById('folderScrim');
   const titleEl = document.getElementById('folderTitle');
   const bodyEl = document.getElementById('folderBody');
+  const trackEl = document.getElementById('folderTrack');
   const backBtn = document.getElementById('folderBack');
   const pager = document.getElementById('folderPager');
   const pageInfo = document.getElementById('folderPageInfo');
@@ -21,6 +22,7 @@ export function createFolderPanel({ onOpen, getIconMode, onReorder }) {
   let page = 0;
   let pages = 1;
   let capacity = 12;
+  let columns = 6;
   let skipClick = false;
   let dragPayload = null;
 
@@ -69,7 +71,7 @@ export function createFolderPanel({ onOpen, getIconMode, onReorder }) {
     const maxHeight = parseFloat(panel.style.maxHeight) || window.innerHeight * 0.72;
     const available = Math.max(150, maxHeight - PANEL_CHROME);
     const rows = Math.max(1, Math.min(5, Math.floor(available / ROW_HEIGHT)));
-    bodyEl.style.gridTemplateColumns = `repeat(${cols}, minmax(0, 1fr))`;
+    columns = cols;
     capacity = cols * rows;
   }
 
@@ -80,13 +82,33 @@ export function createFolderPanel({ onOpen, getIconMode, onReorder }) {
     nextBtn.disabled = page >= pages - 1;
   }
 
+  /** animate=false 时直接落到目标页，避免打开文件夹时出现滑动 */
+  function applyPage(animate) {
+    const offset = `translate3d(-${page * 100}%, 0, 0)`;
+    if (animate) {
+      trackEl.style.transition = '';
+      trackEl.style.transform = offset;
+      return;
+    }
+    trackEl.style.transition = 'none';
+    trackEl.style.transform = offset;
+    void trackEl.offsetWidth;
+    trackEl.style.transition = '';
+  }
+
+  function setPage(index, animate = true) {
+    const next = Math.max(0, Math.min(index, pages - 1));
+    page = next;
+    applyPage(animate);
+    renderPager();
+  }
+
   function render() {
     const folder = stack[stack.length - 1];
     if (!folder) return;
     titleEl.textContent = folder.title;
     backBtn.hidden = stack.length <= 1;
-    bodyEl.replaceChildren();
-    bodyEl.scrollTop = 0;
+    trackEl.replaceChildren();
 
     computeCapacity();
     const children = folder.children || [];
@@ -94,13 +116,21 @@ export function createFolderPanel({ onOpen, getIconMode, onReorder }) {
     page = Math.min(page, pages - 1);
 
     if (!children.length) {
-      bodyEl.appendChild(el('div', 'folder-empty', '这个文件夹还没有书签'));
+      const emptyPage = el('div', 'folder-page');
+      emptyPage.style.gridTemplateColumns = `repeat(${columns}, minmax(0, 1fr))`;
+      emptyPage.appendChild(el('div', 'folder-empty', '这个文件夹还没有书签'));
+      trackEl.appendChild(emptyPage);
       pages = 1;
+      page = 0;
+      applyPage(false);
       renderPager();
       return;
     }
 
-    children.slice(page * capacity, page * capacity + capacity).forEach((child) => {
+    for (let i = 0; i < pages; i += 1) {
+      const pageEl = el('div', 'folder-page');
+      pageEl.style.gridTemplateColumns = `repeat(${columns}, minmax(0, 1fr))`;
+      children.slice(i * capacity, i * capacity + capacity).forEach((child) => {
       const btn = el('button', 'fp-item');
       btn.type = 'button';
       btn.title = child.title;
@@ -183,9 +213,12 @@ export function createFolderPanel({ onOpen, getIconMode, onReorder }) {
         });
       }
 
-      bodyEl.appendChild(btn);
-    });
+        pageEl.appendChild(btn);
+      });
+      trackEl.appendChild(pageEl);
+    }
 
+    applyPage(false);
     renderPager();
   }
 
@@ -211,16 +244,8 @@ export function createFolderPanel({ onOpen, getIconMode, onReorder }) {
   }
 
   scrim.addEventListener('click', close);
-  prevBtn.addEventListener('click', () => {
-    if (page <= 0) return;
-    page -= 1;
-    render();
-  });
-  nextBtn.addEventListener('click', () => {
-    if (page >= pages - 1) return;
-    page += 1;
-    render();
-  });
+  prevBtn.addEventListener('click', () => setPage(page - 1));
+  nextBtn.addEventListener('click', () => setPage(page + 1));
   backBtn.addEventListener('click', () => {
     if (stack.length <= 1) return;
     stack.pop();
@@ -246,11 +271,6 @@ export function createFolderPanel({ onOpen, getIconMode, onReorder }) {
   const SWIPE_THRESHOLD = 50;
   let swipe = null;
 
-  function resetTransform() {
-    bodyEl.style.transition = 'transform 0.22s ease';
-    bodyEl.style.transform = 'translateX(0)';
-  }
-
   function endSwipe(cancelled) {
     if (!swipe) return;
     const { dx, moved, pointerId } = swipe;
@@ -258,26 +278,21 @@ export function createFolderPanel({ onOpen, getIconMode, onReorder }) {
     if (bodyEl.hasPointerCapture && bodyEl.hasPointerCapture(pointerId)) {
       bodyEl.releasePointerCapture(pointerId);
     }
-    resetTransform();
+    applyPage(true);
     if (cancelled || !moved) return;
 
     skipClick = true;
     setTimeout(() => { skipClick = false; }, 0);
 
-    if (dx <= -SWIPE_THRESHOLD && page < pages - 1) {
-      page += 1;
-      render();
-    } else if (dx >= SWIPE_THRESHOLD && page > 0) {
-      page -= 1;
-      render();
-    }
+    if (dx <= -SWIPE_THRESHOLD && page < pages - 1) setPage(page + 1);
+    else if (dx >= SWIPE_THRESHOLD && page > 0) setPage(page - 1);
   }
 
   bodyEl.addEventListener('pointerdown', (event) => {
     if (pages <= 1 || event.button !== 0) return;
     if (event.target.closest('.fp-item')) return;
     swipe = { x: event.clientX, y: event.clientY, dx: 0, moved: false, pointerId: event.pointerId };
-    bodyEl.style.transition = 'none';
+    trackEl.style.transition = 'none';
   });
 
   bodyEl.addEventListener('pointermove', (event) => {
@@ -297,7 +312,8 @@ export function createFolderPanel({ onOpen, getIconMode, onReorder }) {
     swipe.dx = dx;
     const limit = bodyEl.clientWidth || 400;
     const offset = Math.max(-limit, Math.min(limit, dx)) * 0.35;
-    bodyEl.style.transform = `translateX(${offset}px)`;
+    const base = -page * (bodyEl.clientWidth || 0);
+    trackEl.style.transform = `translate3d(${base + offset}px, 0, 0)`;
   });
 
   bodyEl.addEventListener('pointerup', () => endSwipe(false));
@@ -314,14 +330,9 @@ export function createFolderPanel({ onOpen, getIconMode, onReorder }) {
       if (now < wheelLock) return;
       const raw = Math.abs(event.deltaX) > Math.abs(event.deltaY) ? event.deltaX : event.deltaY;
       if (Math.abs(raw) < 10) return;
-      wheelLock = now + 360;
-      if (raw > 0 && page < pages - 1) {
-        page += 1;
-        render();
-      } else if (raw < 0 && page > 0) {
-        page -= 1;
-        render();
-      }
+      wheelLock = now + 320;
+      if (raw > 0) setPage(page + 1);
+      else if (raw < 0) setPage(page - 1);
     },
     { passive: false }
   );
@@ -330,12 +341,10 @@ export function createFolderPanel({ onOpen, getIconMode, onReorder }) {
     if (!opened) return;
     if (event.key === 'Escape') {
       close();
-    } else if (event.key === 'ArrowRight' && page < pages - 1) {
-      page += 1;
-      render();
-    } else if (event.key === 'ArrowLeft' && page > 0) {
-      page -= 1;
-      render();
+    } else if (event.key === 'ArrowRight') {
+      setPage(page + 1);
+    } else if (event.key === 'ArrowLeft') {
+      setPage(page - 1);
     }
   });
 

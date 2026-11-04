@@ -2,7 +2,7 @@ import { findBookmarks } from './bookmarks.js';
 import { el, hostOf, faviconImg, svgIcon, debounce } from './util.js';
 import { loadLastQuery, saveLastQuery } from './store.js';
 
-export function createSearch({ getTiles, getSettings, onQuery, onOpen, onEngineChange }) {
+export function createSearch({ getTiles, getSettings, onOpen, onEngineChange }) {
   const form = document.getElementById('searchForm');
   const input = document.getElementById('searchInput');
   const area = document.getElementById('searchArea');
@@ -171,7 +171,6 @@ export function createSearch({ getTiles, getSettings, onQuery, onOpen, onEngineC
   }
 
   input.addEventListener('input', () => {
-    onQuery(input.value);
     if (settings.search.suggestions) buildSuggestions(input.value);
     else closeSuggest();
     persistQuery(input.value);
@@ -198,10 +197,7 @@ export function createSearch({ getTiles, getSettings, onQuery, onOpen, onEngineC
       return;
     }
     const query = input.value.trim();
-    if (query) {
-      onQuery(query);
-      goSearch();
-    }
+    if (query) goSearch();
   });
 
   engineBtn.addEventListener('click', (event) => {
@@ -224,7 +220,6 @@ export function createSearch({ getTiles, getSettings, onQuery, onOpen, onEngineC
     const saved = await loadLastQuery();
     if (!saved) return;
     input.value = saved;
-    onQuery(saved);
   }
 
   sync();
@@ -236,7 +231,6 @@ export function createSearch({ getTiles, getSettings, onQuery, onOpen, onEngineC
     clear() {
       input.value = '';
       closeMenus();
-      onQuery('');
       if (settings.search.keepContent) saveLastQuery('');
     },
     focus() {

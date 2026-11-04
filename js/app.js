@@ -1,11 +1,11 @@
-import { BACKGROUND_PRESETS, QUOTES } from './constants.js';
+import { BACKGROUND_PRESETS, QUOTES, SYSTEM_SHORTCUT_DEFS, shortcutUrl } from './constants.js';
 import { loadSettings, saveSettings, loadWallpaper, saveWallpaper, clearWallpaper, cloneSettings } from './store.js';
 import { fetchTiles } from './bookmarks.js';
 import { createGrid } from './grid.js';
 import { createFolderPanel } from './folder-panel.js';
 import { createSearch } from './search.js';
 import { createSettingsPanel } from './settings-panel.js';
-import { debounce, isExtension } from './util.js';
+import { debounce, el, svgIcon, isExtension } from './util.js';
 
 const state = {
   settings: null,
@@ -32,7 +32,12 @@ const dom = {
   clockTime: document.getElementById('clockTime'),
   clockDate: document.getElementById('clockDate'),
   clockQuote: document.getElementById('clockQuote'),
+  menuWrap: document.getElementById('menuWrap'),
   menuBtn: document.getElementById('menuBtn'),
+  quickMenu: document.getElementById('quickMenu'),
+  quickGrid: document.getElementById('quickGrid'),
+  quickHint: document.getElementById('quickHint'),
+  openSettingsBtn: document.getElementById('openSettingsBtn'),
 };
 
 const grid = createGrid({
@@ -60,7 +65,7 @@ let settingsPanel = null;
 
 function openUrl(url) {
   if (!url) return;
-  if (/^chrome:\/\//i.test(url)) {
+  if (/^(chrome|edge|about):\/\//i.test(url)) {
     if (isExtension()) chrome.tabs.create({ url });
     return;
   }
@@ -134,19 +139,33 @@ function applyClock() {
   if (clock || quote) updateClock();
 }
 
+let dotNodes = [];
+let dotCount = 0;
+
 function renderDots(pages, current) {
   dom.gridPager.hidden = pages <= 1;
   dom.pagePrev.disabled = current <= 0;
   dom.pageNext.disabled = current >= pages - 1;
-  dom.dots.replaceChildren();
-  for (let i = 0; i < pages; i += 1) {
-    const dot = document.createElement('button');
-    dot.type = 'button';
-    dot.className = i === current ? 'dot active' : 'dot';
-    dot.title = `第 ${i + 1} 页`;
-    dot.addEventListener('click', () => grid.setPage(i));
-    dom.dots.appendChild(dot);
+
+  if (dotCount !== pages) {
+    dom.dots.replaceChildren();
+    dotNodes = [];
+    const frag = document.createDocumentFragment();
+    for (let i = 0; i < pages; i += 1) {
+      const dot = document.createElement('button');
+      dot.type = 'button';
+      dot.className = 'dot';
+      dot.title = `第 ${i + 1} 页`;
+      dot.addEventListener('click', () => grid.setPage(i));
+      dotNodes.push(dot);
+      frag.appendChild(dot);
+    }
+    dom.dots.appendChild(frag);
+    dotCount = pages;
   }
+
+  // 只切换 active 状态，翻页时不再整组重建圆点
+  dotNodes.forEach((node, index) => node.classList.toggle('active', index === current));
 }
 
 function updateEmpty(query) {
@@ -170,12 +189,51 @@ function updateEmpty(query) {
 async function refreshBookmarks() {
   const tiles = await fetchTiles({
     includeOther: state.settings.features.showOtherBookmarks,
-    includeSystem: state.settings.features.systemShortcuts,
   });
   state.tiles = tiles;
   folderPanel.close();
   grid.setData(tiles);
   updateEmpty('');
+}
+
+/** 设置按钮下的系统快捷入口，按设置逐项展示 */
+function buildQuickMenu() {
+  const config = state.settings.features.systemShortcuts || {};
+  const list = SYSTEM_SHORTCUT_DEFS.filter((def) => config[def.key] !== false);
+  dom.quickGrid.replaceChildren();
+
+  list.forEach((def) => {
+    const btn = el('button', 'quick-item');
+    btn.type = 'button';
+    btn.title = def.title;
+    const icon = el('span', 'quick-icon');
+    icon.appendChild(svgIcon(def.sym));
+    btn.append(icon, el('span', 'quick-label', def.title));
+    btn.addEventListener('click', () => {
+      closeQuickMenu();
+      openUrl(shortcutUrl(def));
+    });
+    dom.quickGrid.appendChild(btn);
+  });
+
+  dom.quickGrid.hidden = !list.length;
+  dom.quickHint.hidden = !!list.length;
+}
+
+function openQuickMenu() {
+  buildQuickMenu();
+  dom.quickMenu.hidden = false;
+  dom.menuBtn.setAttribute('aria-expanded', 'true');
+}
+
+function closeQuickMenu() {
+  dom.quickMenu.hidden = true;
+  dom.menuBtn.setAttribute('aria-expanded', 'false');
+}
+
+function toggleQuickMenu() {
+  if (dom.quickMenu.hidden) openQuickMenu();
+  else closeQuickMenu();
 }
 
 function applyAll() {
@@ -188,7 +246,6 @@ function applyAll() {
 }
 
 let lastShowOther = null;
-let lastSystemShortcuts = null;
 
 function onSettingsChange() {
   applyFont();
@@ -199,15 +256,11 @@ function onSettingsChange() {
   grid.setSettings(state.settings);
   updateEmpty('');
   saveSettings(state.settings);
+  if (!dom.quickMenu.hidden) buildQuickMenu();
 
   const showOther = state.settings.features.showOtherBookmarks;
-  const systemShortcuts = state.settings.features.systemShortcuts;
-  if (
-    (lastShowOther !== null && lastShowOther !== showOther) ||
-    (lastSystemShortcuts !== null && lastSystemShortcuts !== systemShortcuts)
-  ) {
+  if (lastShowOther !== null && lastShowOther !== showOther) {
     lastShowOther = showOther;
-    lastSystemShortcuts = systemShortcuts;
     refreshBookmarks();
   }
 }
@@ -238,7 +291,6 @@ async function onReset() {
   saveSettings(state.settings);
   if (search) search.sync();
   lastShowOther = state.settings.features.showOtherBookmarks;
-  lastSystemShortcuts = state.settings.features.systemShortcuts;
   refreshBookmarks();
 }
 
@@ -265,15 +317,10 @@ async function init() {
   state.settings = await loadSettings();
   state.wallpaper = await loadWallpaper();
   lastShowOther = state.settings.features.showOtherBookmarks;
-  lastSystemShortcuts = state.settings.features.systemShortcuts;
 
   search = createSearch({
     getTiles: () => state.tiles,
     getSettings: () => state.settings,
-    onQuery: (query) => {
-      grid.setFilter(query);
-      updateEmpty(query);
-    },
     onOpen: (url) => openUrl(url),
     onEngineChange: () => saveSettings(state.settings),
   });
@@ -290,7 +337,14 @@ async function init() {
   applyAll();
   grid.onPagesChange(renderDots);
 
-  dom.menuBtn.addEventListener('click', () => settingsPanel.open());
+  dom.menuBtn.addEventListener('click', () => toggleQuickMenu());
+  dom.openSettingsBtn.addEventListener('click', () => {
+    closeQuickMenu();
+    settingsPanel.open();
+  });
+  document.addEventListener('click', (event) => {
+    if (!dom.quickMenu.hidden && !dom.menuWrap.contains(event.target)) closeQuickMenu();
+  });
   dom.pagePrev.addEventListener('click', () => grid.stepPage(-1));
   dom.pageNext.addEventListener('click', () => grid.stepPage(1));
   dom.emptyRefresh.addEventListener('click', () => refreshBookmarks());
@@ -312,6 +366,7 @@ async function init() {
 
   document.addEventListener('keydown', (event) => {
     const typing = search.isTyping();
+    if (event.key === 'Escape' && !dom.quickMenu.hidden) closeQuickMenu();
     if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
       event.preventDefault();
       if (!state.settings.search.hidden) search.focus();

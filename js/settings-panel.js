@@ -1,4 +1,4 @@
-import { BACKGROUND_PRESETS, FONT_COLORS, LAYOUT_PRESETS } from './constants.js';
+import { BACKGROUND_PRESETS, FONT_COLORS, LAYOUT_PRESETS, SYSTEM_SHORTCUT_DEFS } from './constants.js';
 import { el, svgIcon, debounce } from './util.js';
 
 export function createSettingsPanel({ getSettings, onChange, onReset, onWallpaperChange, onRemoveWallpaper, onExport }) {
@@ -544,11 +544,21 @@ export function createSettingsPanel({ getSettings, onChange, onReset, onWallpape
     const inner = createSection('其他');
     inner.appendChild(createToggle('显示时钟与日期', null, () => settings.features.clock, (v) => { settings.features.clock = v; }));
     inner.appendChild(createToggle('显示每日一言', null, () => settings.features.quote, (v) => { settings.features.quote = v; }));
-    inner.appendChild(
-      createToggle('显示系统快捷方式', '包含历史记录、下载、密码、扩展、收藏夹和设置', () => settings.features.systemShortcuts, (v) => {
-        settings.features.systemShortcuts = v;
-      })
-    );
+
+    inner.appendChild(el('div', 'field-head', '快捷入口')).style.marginTop = '20px';
+    inner.appendChild(el('p', 'field-hint', '展示在右上角设置按钮下方，按需开启。'));
+    SYSTEM_SHORTCUT_DEFS.forEach((def) => {
+      inner.appendChild(
+        createToggle(
+          def.title,
+          null,
+          () => settings.features.systemShortcuts[def.key] !== false,
+          (v) => {
+            settings.features.systemShortcuts[def.key] = v;
+          }
+        )
+      );
+    });
     inner.appendChild(
       createTextarea({
         label: '每日一言内容',

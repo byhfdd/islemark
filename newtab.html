@@ -35,9 +35,19 @@
           </form>
           <div id="suggestBox" class="suggest-box" hidden></div>
         </div>
-        <button id="menuBtn" class="round-btn" title="设置">
-          <svg class="icon"><use href="#i-menu"></use></svg>
-        </button>
+        <div id="menuWrap" class="menu-wrap">
+          <button id="menuBtn" class="round-btn" title="快捷入口" aria-expanded="false">
+            <svg class="icon"><use href="#i-menu"></use></svg>
+          </button>
+          <div id="quickMenu" class="quick-menu" hidden>
+            <div id="quickGrid" class="quick-grid"></div>
+            <p id="quickHint" class="quick-hint" hidden>可在设置中开启快捷入口</p>
+            <button id="openSettingsBtn" class="quick-settings" type="button">
+              <svg class="icon"><use href="#i-gear"></use></svg>
+              <span>打开设置</span>
+            </button>
+          </div>
+        </div>
       </header>
 
       <div id="gridViewport" class="grid-viewport">
@@ -73,7 +83,9 @@
       </button>
       <span id="folderTitle"></span>
     </div>
-    <div id="folderBody" class="folder-body"></div>
+    <div id="folderBody" class="folder-body">
+      <div id="folderTrack" class="folder-track"></div>
+    </div>
     <div id="folderPager" class="folder-pager" hidden>
       <button id="folderPrev" class="pager-btn" type="button" title="上一页">
         <svg class="icon"><use href="#i-back"></use></svg>

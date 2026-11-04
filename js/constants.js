@@ -37,6 +37,51 @@ export function cloneEngineDefs() {
   return ENGINE_DEFS.map((engine) => ({ ...engine }));
 }
 
+/** 右上角设置按钮下的系统快捷入口，可在设置中逐项开关 */
+export const SYSTEM_SHORTCUT_DEFS = [
+  {
+    key: 'history',
+    title: '历史记录',
+    sym: 'i-history',
+    chrome: 'chrome://history/',
+    edge: 'edge://history/',
+  },
+  {
+    key: 'downloads',
+    title: '下载',
+    sym: 'i-download',
+    chrome: 'chrome://downloads/',
+    edge: 'edge://downloads/',
+  },
+  {
+    key: 'passwords',
+    title: '密码',
+    sym: 'i-key',
+    chrome: 'chrome://password-manager/passwords',
+    edge: 'edge://settings/autofill/passwords?source=profileflyout',
+  },
+  {
+    key: 'extensions',
+    title: '扩展',
+    sym: 'i-puzzle',
+    chrome: 'chrome://extensions/',
+    edge: 'edge://extensions/',
+  },
+  {
+    key: 'bookmarks',
+    title: '收藏夹',
+    sym: 'i-star',
+    chrome: 'chrome://bookmarks/',
+    edge: 'edge://favorites/',
+  },
+];
+
+/** 根据当前浏览器返回快捷入口地址（Edge 使用 edge:// 路径） */
+export function shortcutUrl(def) {
+  const isEdge = typeof navigator !== 'undefined' && /Edg(?:e|A|iOS)?\//.test(navigator.userAgent);
+  return isEdge ? def.edge : def.chrome;
+}
+
 export const DEFAULT_SETTINGS = {
   layoutPreset: 'custom',
   layout: {
@@ -79,7 +124,13 @@ export const DEFAULT_SETTINGS = {
     showOtherBookmarks: true,
     iconMode: 'favicon',
     quotes: [],
-    systemShortcuts: true,
+    systemShortcuts: {
+      history: true,
+      downloads: true,
+      passwords: true,
+      extensions: true,
+      bookmarks: true,
+    },
   },
   engine: 'bing',
   engines: cloneEngineDefs(),
