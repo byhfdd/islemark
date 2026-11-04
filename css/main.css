@@ -573,6 +573,7 @@ body.hide-engine .search-shell {
 }
 
 .tile {
+  position: relative;
   width: var(--icon-size);
   display: flex;
   flex-direction: column;
@@ -627,15 +628,37 @@ body.hide-engine .search-shell {
   opacity: 0.4;
 }
 
-.tile.drop-target .tile-icon {
-  transform: translateY(-3px) scale(1.06);
-  background: rgba(255, 255, 255, 0.3);
-  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.78), 0 16px 32px rgba(0, 0, 0, 0.3);
+/* 拖拽插入位置：磁贴左右的白色竖线，清楚提示松手后的顺序 */
+.tile.drop-before::after,
+.tile.drop-after::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  height: calc(var(--icon-size) - 4px);
+  width: 3px;
+  border-radius: 3px;
+  background: #fff;
+  box-shadow: 0 0 12px rgba(255, 255, 255, 0.9);
+  pointer-events: none;
+}
+
+.tile.drop-before::after {
+  left: -7px;
+}
+
+.tile.drop-after::after {
+  left: calc(100% + 4px);
 }
 
 .tile.is-folder .tile-icon {
   background: rgba(255, 255, 255, 0.19);
   backdrop-filter: blur(10px);
+}
+
+.tile.drop-inside .tile-icon {
+  transform: translateY(-3px) scale(1.1);
+  background: rgba(255, 255, 255, 0.34);
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.9), 0 18px 34px rgba(0, 0, 0, 0.32);
 }
 
 .folder-preview {
@@ -816,6 +839,34 @@ body.hide-engine .search-shell {
   animation: fadeIn 0.18s ease;
 }
 
+/* 拖着书签到弹层外时，明确提示“会移出文件夹” */
+.folder-scrim.show-out {
+  background: rgba(6, 8, 12, 0.58);
+}
+
+.folder-out-hint {
+  position: fixed;
+  left: 50%;
+  bottom: 8vh;
+  padding: 11px 24px;
+  border: 1px dashed rgba(255, 255, 255, 0.72);
+  border-radius: 999px;
+  background: rgba(20, 22, 28, 0.86);
+  color: #fff;
+  font-size: 13px;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transform: translate(-50%, 10px);
+  transition: opacity 0.16s ease, transform 0.16s ease;
+}
+
+.folder-scrim.show-out .folder-out-hint {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
 @keyframes fadeIn {
   from { opacity: 0; }
   to { opacity: 1; }
@@ -827,7 +878,7 @@ body.hide-engine .search-shell {
   left: 50%;
   top: 50%;
   transform: translate(-50%, calc(-50% + var(--folder-y, 0vh)));
-  width: min(780px, calc(100vw - 32px));
+  width: min(860px, calc(100vw - 32px));
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -906,10 +957,11 @@ body.hide-engine .search-shell {
   flex: 0 0 100%;
   display: flex;
   flex-wrap: wrap;
-  justify-content: center;
+  justify-content: flex-start;
   align-content: flex-start;
   gap: 20px 8px;
   padding: 20px 22px 18px;
+  min-height: var(--folder-page-min, 0px);
 }
 
 .folder-pager {
@@ -963,6 +1015,7 @@ body.hide-engine .search-shell {
 }
 
 .fp-item {
+  position: relative;
   width: 92px;
   display: flex;
   flex-direction: column;
@@ -1025,9 +1078,31 @@ body.hide-engine .search-shell {
   opacity: 0.4;
 }
 
-.fp-item.drop-target .fp-icon {
-  transform: translateY(-2px) scale(1.05);
-  box-shadow: 0 0 0 3px rgba(29, 29, 31, 0.25), 0 10px 20px rgba(0, 0, 0, 0.18);
+/* 文件夹内的插入位置提示 */
+.fp-item.drop-before::after,
+.fp-item.drop-after::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  height: 52px;
+  width: 3px;
+  border-radius: 3px;
+  background: #2b8cf0;
+  box-shadow: 0 0 0 2px rgba(43, 140, 240, 0.16);
+  pointer-events: none;
+}
+
+.fp-item.drop-before::after {
+  left: -6px;
+}
+
+.fp-item.drop-after::after {
+  left: calc(100% + 3px);
+}
+
+.fp-item.drop-inside .fp-icon {
+  transform: translateY(-2px) scale(1.08);
+  box-shadow: 0 0 0 3px rgba(43, 140, 240, 0.55), 0 10px 20px rgba(0, 0, 0, 0.18);
 }
 
 .fp-label {
@@ -1047,6 +1122,24 @@ body.hide-engine .search-shell {
   text-align: center;
   font-size: 13px;
   color: #8b8b92;
+}
+
+/* ---------- 拖拽跟随提示 ---------- */
+
+.drag-tip {
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 120;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: rgba(22, 24, 30, 0.92);
+  color: #fff;
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: nowrap;
+  pointer-events: none;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
 }
 
 /* ---------- 杂项 ---------- */

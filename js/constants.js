@@ -95,6 +95,8 @@ export const DEFAULT_SETTINGS = {
     radius: 25,
     opacity: 100,
     folderY: 0,
+    folderCols: 4,
+    folderRows: 3,
   },
   search: {
     hidden: false,

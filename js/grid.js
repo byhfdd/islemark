@@ -1,8 +1,10 @@
-import { el, faviconImg, svgIcon } from './util.js';
+import { el, faviconImg, svgIcon, showDragTip, hideDragTip } from './util.js';
 import { previewBookmarks, moveBookmarkNode } from './bookmarks.js';
 
 const BASE_ICON = 76;
 const LABEL_GAP = 8;
+
+const DROP_CLASSES = ['drop-before', 'drop-after', 'drop-inside'];
 
 export function createGrid({ viewport, track, onOpen, onReorder }) {
   let visibleTiles = [];
@@ -19,26 +21,41 @@ export function createGrid({ viewport, track, onOpen, onReorder }) {
   }
 
   function clearDropTargets() {
-    track.querySelectorAll('.tile.drop-target').forEach((node) => node.classList.remove('drop-target'));
+    track.querySelectorAll('.tile').forEach((node) => node.classList.remove(...DROP_CLASSES));
   }
 
-  /** 计算落点：文件夹中部→放入，边缘/普通磁贴→同级排序 */
+  function setDropMode(btn, mode) {
+    btn.classList.remove(...DROP_CLASSES);
+    btn.classList.add(`drop-${mode}`);
+  }
+
+  function clearTile(btn) {
+    btn.classList.remove(...DROP_CLASSES);
+  }
+
+  /**
+   * 计算落点：文件夹中部→放入文件夹；普通磁贴左右半边→插到它前面/后面。
+   * 使用 anchorId + after 交给 bookmarks 内部重新计算索引，避免依赖可能缺失的 index。
+   */
   function dropTargetFor(tile, ratio) {
     const payload = dragPayload;
-    if (!payload || tile.fixed || tile.system || payload.id === tile.id) return null;
+    if (!payload || tile.system || payload.id === tile.id) return null;
     if (tile.type === 'folder' && ratio > 0.22 && ratio < 0.78) {
-      return { parentId: tile.id };
+      return { mode: 'inside', target: { parentId: tile.id } };
     }
+    if (tile.fixed) return null;
     const after = ratio >= 0.5;
-    const base = (typeof tile.index === 'number' ? tile.index : 0) + (after ? 1 : 0);
-    const adjust = payload.parentId === tile.parentId && payload.index < base ? 1 : 0;
-    return { parentId: tile.parentId, index: base - adjust };
+    return {
+      mode: after ? 'after' : 'before',
+      target: { parentId: tile.parentId, anchorId: tile.id, after },
+    };
   }
 
   async function commitDrop(id, target) {
     if (!id || !target || !target.parentId) return;
     const ok = await moveBookmarkNode(id, target);
     clearDropTargets();
+    hideDragTip();
     if (ok && onReorder) await onReorder();
   }
 
@@ -117,7 +134,6 @@ export function createGrid({ viewport, track, onOpen, onReorder }) {
           id: tile.id,
           type: tile.type,
           parentId: tile.parentId || '',
-          index: typeof tile.index === 'number' ? tile.index : 0,
         };
         btn.classList.add('dragging');
         if (event.dataTransfer) {
@@ -132,6 +148,7 @@ export function createGrid({ viewport, track, onOpen, onReorder }) {
       btn.addEventListener('dragend', () => {
         btn.classList.remove('dragging');
         clearDropTargets();
+        hideDragTip();
         dragPayload = null;
         suppressClick = true;
         setTimeout(() => { suppressClick = false; }, 0);
@@ -140,15 +157,22 @@ export function createGrid({ viewport, track, onOpen, onReorder }) {
         if (!dragPayload) return;
         const rect = btn.getBoundingClientRect();
         const ratio = (event.clientX - rect.left) / (rect.width || 1);
-        if (!dropTargetFor(tile, ratio)) return;
+        const hit = dropTargetFor(tile, ratio);
+        if (!hit) return;
         event.preventDefault();
         event.stopPropagation();
         if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
-        btn.classList.add('drop-target');
+        setDropMode(btn, hit.mode);
+        const tip =
+          hit.mode === 'inside'
+            ? `移入「${tile.title}」`
+            : `移到「${tile.title}」${hit.mode === 'after' ? '后' : '前'}`;
+        showDragTip(tip, event.clientX, event.clientY);
       });
       btn.addEventListener('dragleave', (event) => {
         if (btn.contains(event.relatedTarget)) return;
-        btn.classList.remove('drop-target');
+        clearTile(btn);
+        hideDragTip();
       });
       btn.addEventListener('drop', (event) => {
         event.preventDefault();
@@ -156,11 +180,12 @@ export function createGrid({ viewport, track, onOpen, onReorder }) {
         const rect = btn.getBoundingClientRect();
         const ratio = (event.clientX - rect.left) / (rect.width || 1);
         const payload = dragPayload;
-        btn.classList.remove('drop-target');
+        clearTile(btn);
+        hideDragTip();
         if (!payload) return;
-        const target = dropTargetFor(tile, ratio);
-        if (!target) return;
-        commitDrop(payload.id, target);
+        const hit = dropTargetFor(tile, ratio);
+        if (!hit) return;
+        commitDrop(payload.id, hit.target);
       });
     }
 
@@ -283,11 +308,17 @@ export function createGrid({ viewport, track, onOpen, onReorder }) {
     if (!dragPayload || event.target.closest('.tile')) return;
     event.preventDefault();
     if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
+    showDragTip('移到书签栏末尾', event.clientX, event.clientY);
+  });
+  viewport.addEventListener('dragleave', (event) => {
+    if (event.relatedTarget && viewport.contains(event.relatedTarget)) return;
+    hideDragTip();
   });
   viewport.addEventListener('drop', (event) => {
     if (!dragPayload || event.target.closest('.tile')) return;
     event.preventDefault();
     const id = dragPayload.id;
+    hideDragTip();
     commitDrop(id, { parentId: '1' });
   });
 

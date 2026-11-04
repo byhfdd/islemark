@@ -57,7 +57,8 @@ const grid = createGrid({
 const folderPanel = createFolderPanel({
   onOpen: (tile) => openUrl(tile.url),
   getIconMode: () => state.settings.features.iconMode,
-  onReorder: () => refreshBookmarks(),
+  getSettings: () => state.settings,
+  onReorder: (keepPanel) => refreshBookmarks({ keepPanel: keepPanel !== false }),
 });
 
 let search = null;
@@ -187,12 +188,13 @@ function updateEmpty(query) {
   }
 }
 
-async function refreshBookmarks() {
+async function refreshBookmarks({ keepPanel = false } = {}) {
   const tiles = await fetchTiles({
     includeOther: state.settings.features.showOtherBookmarks,
   });
   state.tiles = tiles;
-  folderPanel.close();
+  if (keepPanel && folderPanel.isOpen()) folderPanel.refreshData(tiles);
+  else folderPanel.close();
   grid.setData(tiles);
   updateEmpty('');
 }
@@ -380,7 +382,7 @@ async function init() {
   });
 
   if (isExtension()) {
-    const reload = debounce(() => refreshBookmarks(), 350);
+    const reload = debounce(() => refreshBookmarks({ keepPanel: folderPanel.isOpen() }), 350);
     ['onCreated', 'onRemoved', 'onChanged', 'onMoved', 'onChildrenReordered'].forEach((name) => {
       if (chrome.bookmarks[name]) chrome.bookmarks[name].addListener(reload);
     });

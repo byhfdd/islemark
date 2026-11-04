@@ -1,15 +1,16 @@
-import { el, faviconImg, svgIcon } from './util.js';
+import { el, faviconImg, svgIcon, showDragTip, hideDragTip } from './util.js';
 import { moveBookmarkNode } from './bookmarks.js';
 
 const ITEM_WIDTH = 92;
 const ITEM_GAP_X = 8;
 const MIN_PANEL_WIDTH = 380;
-const MAX_PANEL_WIDTH = 780;
+const MAX_PANEL_WIDTH = 860;
 const PANEL_PADDING = 44;
 const ROW_HEIGHT = 116;
 const PANEL_CHROME = 150;
+const DROP_CLASSES = ['drop-before', 'drop-after', 'drop-inside'];
 
-export function createFolderPanel({ onOpen, getIconMode, onReorder }) {
+export function createFolderPanel({ onOpen, getIconMode, getSettings, onReorder }) {
   const panel = document.getElementById('folderPanel');
   const scrim = document.getElementById('folderScrim');
   const titleEl = document.getElementById('folderTitle');
@@ -20,6 +21,8 @@ export function createFolderPanel({ onOpen, getIconMode, onReorder }) {
   const pageInfo = document.getElementById('folderPageInfo');
   const prevBtn = document.getElementById('folderPrev');
   const nextBtn = document.getElementById('folderNext');
+  const outHint = el('div', 'folder-out-hint', '松开鼠标，移出到书签栏');
+  scrim.appendChild(outHint);
 
   let stack = [];
   let opened = false;
@@ -34,29 +37,44 @@ export function createFolderPanel({ onOpen, getIconMode, onReorder }) {
   }
 
   function clearItemDrops() {
-    bodyEl.querySelectorAll('.fp-item.drop-target').forEach((node) => node.classList.remove('drop-target'));
+    bodyEl.querySelectorAll('.fp-item').forEach((node) => node.classList.remove(...DROP_CLASSES));
   }
 
+  function setDropMode(btn, mode) {
+    btn.classList.remove(...DROP_CLASSES);
+    btn.classList.add(`drop-${mode}`);
+  }
+
+  /** 文件夹中部→移入子文件夹；左右半边→在同级里插入到它前/后 */
   function targetFor(child, ratio) {
     const payload = dragPayload;
-    if (!payload || child.system || child.fixed || payload.id === child.id) return null;
+    if (!payload || child.system || payload.id === child.id) return null;
     if (child.type === 'folder' && ratio > 0.22 && ratio < 0.78) {
-      return { parentId: child.id };
+      return { mode: 'inside', target: { parentId: child.id } };
     }
+    if (child.fixed) return null;
     const after = ratio >= 0.5;
-    const base = (typeof child.index === 'number' ? child.index : 0) + (after ? 1 : 0);
-    const adjust = payload.parentId === child.parentId && payload.index < base ? 1 : 0;
-    return { parentId: child.parentId, index: base - adjust };
+    return {
+      mode: after ? 'after' : 'before',
+      target: { parentId: child.parentId, anchorId: child.id, after },
+    };
+  }
+
+  function clearOutHint() {
+    scrim.classList.remove('show-out');
   }
 
   async function commitFolderDrop(id, target) {
     if (!id || !target || !target.parentId) return;
+    // 移出到书签栏后关闭弹层；文件夹内部排序则保持打开，直接看到新顺序
+    const keepOpen = target.parentId !== '1';
     const ok = await moveBookmarkNode(id, target);
     clearItemDrops();
+    clearOutHint();
+    hideDragTip();
     dragPayload = null;
     if (!ok) return;
-    close();
-    if (onReorder) await onReorder();
+    if (onReorder) await onReorder(keepOpen);
   }
 
   /** 弹层固定在屏幕中央，只限制最大高度；偏移越大，可用高度越小 */
@@ -67,23 +85,31 @@ export function createFolderPanel({ onOpen, getIconMode, onReorder }) {
     panel.style.maxHeight = `${maxHeight}px`;
   }
 
-  /** 每页容量按面板宽度与可用高度计算，超出即翻页而不是滚动 */
+  /** 列/行数由设置决定：列数决定面板宽度，行数决定每页容量 */
+  function folderConfig() {
+    const layout = (getSettings && getSettings() && getSettings().layout) || {};
+    return {
+      cols: Math.max(1, Math.min(8, Number(layout.folderCols) || 4)),
+      rows: Math.max(1, Math.min(6, Number(layout.folderRows) || 3)),
+    };
+  }
+
+  /** 每页容量按配置的列/行计算，超出即翻页而不是滚动 */
   function computeCapacity() {
-    const folder = stack[stack.length - 1];
-    const total = folder && folder.children ? folder.children.length : 0;
+    const cfg = folderConfig();
     const availWidth = Math.min(MAX_PANEL_WIDTH, window.innerWidth - 32);
-    const maxCols = Math.max(3, Math.floor((availWidth - PANEL_PADDING) / (ITEM_WIDTH + ITEM_GAP_X)));
-    // 按内容数量选择列数，避免少书签时只铺成很长的一排
-    const idealCols = Math.max(3, Math.ceil(Math.sqrt(Math.max(1, total))));
-    const cols = Math.min(maxCols, idealCols);
+    const maxCols = Math.max(1, Math.floor((availWidth - PANEL_PADDING) / (ITEM_WIDTH + ITEM_GAP_X)));
+    const cols = Math.max(1, Math.min(cfg.cols, maxCols));
     const desiredWidth = cols * ITEM_WIDTH + (cols - 1) * ITEM_GAP_X + PANEL_PADDING;
     const width = Math.min(availWidth, Math.max(MIN_PANEL_WIDTH, desiredWidth));
     panel.style.width = `${width}px`;
 
+    // 屏幕高度不够时自动少显示几行，避免内容被裁切
     const maxHeight = parseFloat(panel.style.maxHeight) || window.innerHeight * 0.72;
-    const available = Math.max(150, maxHeight - PANEL_CHROME);
-    const rows = Math.max(1, Math.min(5, Math.floor(available / ROW_HEIGHT)));
+    const fitRows = Math.max(1, Math.floor((maxHeight - PANEL_CHROME) / ROW_HEIGHT));
+    const rows = Math.max(1, Math.min(cfg.rows, fitRows));
     capacity = cols * rows;
+    trackEl.style.setProperty('--folder-page-min', `${rows * ROW_HEIGHT}px`);
   }
 
   function renderPager() {
@@ -175,7 +201,6 @@ export function createFolderPanel({ onOpen, getIconMode, onReorder }) {
             id: child.id,
             type: child.type,
             parentId: child.parentId || '',
-            index: typeof child.index === 'number' ? child.index : 0,
           };
           btn.classList.add('dragging');
           if (event.dataTransfer) {
@@ -190,6 +215,8 @@ export function createFolderPanel({ onOpen, getIconMode, onReorder }) {
         btn.addEventListener('dragend', () => {
           btn.classList.remove('dragging');
           clearItemDrops();
+          clearOutHint();
+          hideDragTip();
           dragPayload = null;
           skipClick = true;
           setTimeout(() => { skipClick = false; }, 0);
@@ -198,15 +225,23 @@ export function createFolderPanel({ onOpen, getIconMode, onReorder }) {
           if (!dragPayload) return;
           const rect = btn.getBoundingClientRect();
           const ratio = (event.clientX - rect.left) / (rect.width || 1);
-          if (!targetFor(child, ratio)) return;
+          const hit = targetFor(child, ratio);
+          if (!hit) return;
           event.preventDefault();
           event.stopPropagation();
           if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
-          btn.classList.add('drop-target');
+          clearOutHint();
+          setDropMode(btn, hit.mode);
+          const tip =
+            hit.mode === 'inside'
+              ? `移入「${child.title}」`
+              : `移到「${child.title}」${hit.mode === 'after' ? '后' : '前'}`;
+          showDragTip(tip, event.clientX, event.clientY);
         });
         btn.addEventListener('dragleave', (event) => {
           if (btn.contains(event.relatedTarget)) return;
-          btn.classList.remove('drop-target');
+          btn.classList.remove(...DROP_CLASSES);
+          hideDragTip();
         });
         btn.addEventListener('drop', (event) => {
           event.preventDefault();
@@ -214,11 +249,11 @@ export function createFolderPanel({ onOpen, getIconMode, onReorder }) {
           const rect = btn.getBoundingClientRect();
           const ratio = (event.clientX - rect.left) / (rect.width || 1);
           const payload = dragPayload;
-          btn.classList.remove('drop-target');
+          btn.classList.remove(...DROP_CLASSES);
           if (!payload) return;
-          const target = targetFor(child, ratio);
-          if (!target) return;
-          commitFolderDrop(payload.id, target);
+          const hit = targetFor(child, ratio);
+          if (!hit) return;
+          commitFolderDrop(payload.id, hit.target);
         });
       }
 
@@ -250,6 +285,30 @@ export function createFolderPanel({ onOpen, getIconMode, onReorder }) {
     panel.hidden = true;
     scrim.hidden = true;
     pager.hidden = true;
+    clearItemDrops();
+    clearOutHint();
+    hideDragTip();
+    dragPayload = null;
+  }
+
+  /** 书签变化后按 id 重建当前打开的文件夹层级，保持弹层打开 */
+  function refreshData(tiles) {
+    if (!opened) return;
+    const ids = stack.map((folder) => folder.id);
+    let pool = tiles || [];
+    const next = [];
+    for (const id of ids) {
+      const found = pool.find((node) => node.id === id);
+      if (!found) break;
+      next.push(found);
+      pool = found.children || [];
+    }
+    if (!next.length) {
+      close();
+      return;
+    }
+    stack = next;
+    render();
   }
 
   scrim.addEventListener('click', close);
@@ -267,6 +326,14 @@ export function createFolderPanel({ onOpen, getIconMode, onReorder }) {
     if (!dragPayload) return;
     event.preventDefault();
     if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
+    clearItemDrops();
+    scrim.classList.add('show-out');
+    showDragTip('移出到书签栏', event.clientX, event.clientY);
+  });
+  scrim.addEventListener('dragleave', (event) => {
+    if (event.relatedTarget && scrim.contains(event.relatedTarget)) return;
+    clearOutHint();
+    hideDragTip();
   });
   scrim.addEventListener('drop', (event) => {
     if (!dragPayload) return;
@@ -363,5 +430,12 @@ export function createFolderPanel({ onOpen, getIconMode, onReorder }) {
     render();
   });
 
-  return { open, close, place, reflow() { if (opened) { place(); render(); } }, isOpen: () => opened };
+  return {
+    open,
+    close,
+    place,
+    refreshData,
+    reflow() { if (opened) { place(); render(); } },
+    isOpen: () => opened,
+  };
 }

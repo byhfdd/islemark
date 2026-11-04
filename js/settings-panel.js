@@ -226,6 +226,20 @@ export function createSettingsPanel({ getSettings, onChange, onReset, onWallpape
         set: (v) => { settings.layout.folderY = v; },
       })
     );
+    inner.appendChild(
+      createSlider({
+        label: '文件夹显示列数', min: 3, max: 8, step: 1, unit: '列',
+        get: () => settings.layout.folderCols,
+        set: (v) => { settings.layout.folderCols = v; },
+      })
+    );
+    inner.appendChild(
+      createSlider({
+        label: '文件夹显示行数', min: 1, max: 5, step: 1, unit: '行',
+        get: () => settings.layout.folderRows,
+        set: (v) => { settings.layout.folderRows = v; },
+      })
+    );
   }
 
   function buildSearchSection() {

@@ -93,6 +93,18 @@ const DEMO_TILES = [
   { type: 'bookmark', id: 'demo-32', title: 'GitHub', url: 'https://github.com' },
 ];
 
+const DEMO_ROOT = 'demo-bar';
+
+/** 演示数据补全 parentId，让本地预览也能验证拖拽排序 */
+function normalizeDemo(items, parentId) {
+  items.forEach((item) => {
+    item.parentId = parentId;
+    if (item.children) normalizeDemo(item.children, item.id);
+  });
+}
+
+normalizeDemo(DEMO_TILES, DEMO_ROOT);
+
 function normalizeTitle(node) {
   const title = (node.title || '').trim();
   if (title) return title;
@@ -124,13 +136,84 @@ function toTile(node, parentId) {
   };
 }
 
-/** 真实的 Chrome 书签移动；索引用于改变同级顺序 */
-export async function moveBookmarkNode(id, { parentId, index } = {}) {
-  if (!isExtension() || !id) return false;
+/** 演示模式下的内存排序，方便本地预览验证拖拽效果 */
+function demoMove(id, { parentId, index, anchorId, after }) {
+  let source = null;
+  let node = null;
+  const walk = (items) => {
+    for (const item of items) {
+      if (item.id === id) {
+        source = items;
+        node = item;
+        return true;
+      }
+      if (item.children && walk(item.children)) return true;
+    }
+    return false;
+  };
+  walk(DEMO_TILES);
+  if (!node) return false;
+
+  let target = null;
+  const findFolder = (items) => {
+    for (const item of items) {
+      if (item.id === (parentId || node.parentId) && item.children) {
+        target = item;
+        return true;
+      }
+      if (item.children && findFolder(item.children)) return true;
+    }
+    return false;
+  };
+  if (parentId === DEMO_ROOT || parentId === '1' || !parentId) target = { children: DEMO_TILES };
+  else findFolder(DEMO_TILES);
+  if (!target || !target.children) return false;
+
+  // 不能把文件夹放进自己或自己的子级
+  if (node.children && target.id) {
+    const isDescendant = (folder, id) =>
+      (folder.children || []).some(
+        (child) => child.id === id || isDescendant(child, id)
+      );
+    if (target.id === node.id || isDescendant(node, target.id)) return false;
+  }
+
+  const from = source ? source.indexOf(node) : -1;
+  if (from >= 0) source.splice(from, 1);
+
+  const siblings = target.children;
+  let insert;
+  if (anchorId && anchorId !== id) {
+    const pos = siblings.findIndex((child) => child.id === anchorId);
+    insert = pos >= 0 ? pos + (after ? 1 : 0) : siblings.length;
+  } else {
+    insert = typeof index === 'number' ? Math.max(0, Math.min(index, siblings.length)) : siblings.length;
+  }
+  siblings.splice(insert, 0, node);
+  node.parentId = target.id || DEMO_ROOT;
+  return true;
+}
+
+/** 真实的书签移动；anchorId/after 表示插入到某个同级书签的前/后，index 为兜底 */
+export async function moveBookmarkNode(id, { parentId, index, anchorId, after } = {}) {
+  if (!id) return false;
+  if (!isExtension()) return demoMove(id, { parentId, index, anchorId, after });
   try {
+    let targetIndex;
+    if (parentId && (anchorId || typeof index === 'number')) {
+      // 以移动前的当前子项为准重新计算位置，避免使用可能已经过期的 index
+      const children = await chrome.bookmarks.getChildren(parentId);
+      const siblings = children.filter((child) => child.id !== id);
+      if (anchorId) {
+        const pos = siblings.findIndex((child) => child.id === anchorId);
+        targetIndex = pos >= 0 ? pos + (after ? 1 : 0) : siblings.length;
+      } else {
+        targetIndex = Math.max(0, Math.min(index, siblings.length));
+      }
+    }
     const props = {};
     if (parentId) props.parentId = parentId;
-    if (typeof index === 'number' && index >= 0) props.index = index;
+    if (typeof targetIndex === 'number') props.index = targetIndex;
     await chrome.bookmarks.move(id, props);
     return true;
   } catch {
@@ -156,8 +239,9 @@ export async function fetchTiles({ includeOther = true } = {}) {
 
   const tiles = [];
   (bar && bar.children ? bar.children : []).forEach((node) => {
-    if (node.url) tiles.push(toTile(node));
-    else if (node.children && node.children.length) tiles.push(toTile(node));
+    // 显式传入父级 id，保证拖拽排序在真实书签里能写回正确位置
+    if (node.url) tiles.push(toTile(node, bar.id));
+    else if (node.children && node.children.length) tiles.push(toTile(node, bar.id));
   });
 
   if (includeOther && other && other.children && other.children.length) {

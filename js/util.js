@@ -90,3 +90,29 @@ export function faviconImg(url, title, mode = 'favicon') {
 export function isExtension() {
   return typeof chrome !== 'undefined' && !!chrome.bookmarks;
 }
+
+// ---------- 拖拽跟随提示 ----------
+
+let dragTipNode = null;
+let dragTipWidth = 0;
+
+/** 在光标附近显示拖拽结果提示，让落点一目了然 */
+export function showDragTip(text, x, y) {
+  if (!dragTipNode) {
+    dragTipNode = el('div', 'drag-tip');
+    document.body.appendChild(dragTipNode);
+  }
+  if (dragTipNode.textContent !== text) {
+    dragTipNode.textContent = text;
+    dragTipWidth = 0;
+  }
+  dragTipNode.hidden = false;
+  // 只在文案变化时量一次宽度，避免每次 dragover 都触发布局
+  if (!dragTipWidth) dragTipWidth = dragTipNode.offsetWidth || 160;
+  const left = Math.min(x + 16, Math.max(8, window.innerWidth - dragTipWidth - 10));
+  dragTipNode.style.transform = `translate3d(${Math.round(left)}px, ${Math.round(y + 20)}px, 0)`;
+}
+
+export function hideDragTip() {
+  if (dragTipNode) dragTipNode.hidden = true;
+}
