@@ -221,9 +221,9 @@ export function createSettingsPanel({ getSettings, onChange, onReset, onWallpape
     );
     inner.appendChild(
       createSlider({
-        label: '文件夹垂直位置', min: -30, max: 30, step: 1, unit: 'vh',
-        get: () => settings.layout.folderY,
-        set: (v) => { settings.layout.folderY = v; },
+        label: '与搜索框间距', min: -20, max: 40, step: 1, unit: 'vh',
+        get: () => settings.layout.folderGap,
+        set: (v) => { settings.layout.folderGap = v; },
       })
     );
     inner.appendChild(
@@ -640,7 +640,26 @@ export function createSettingsPanel({ getSettings, onChange, onReset, onWallpape
   exportBtn.addEventListener('click', () => {
     if (onExport) onExport();
   });
+  let resetArmed = false;
+  let resetTimer = 0;
+  const resetLabel = resetBtn.querySelector('span');
+
+  function disarmReset() {
+    clearTimeout(resetTimer);
+    resetArmed = false;
+    resetBtn.classList.remove('armed');
+    if (resetLabel) resetLabel.textContent = '恢复默认';
+  }
+
   resetBtn.addEventListener('click', () => {
+    if (!resetArmed) {
+      resetArmed = true;
+      resetBtn.classList.add('armed');
+      if (resetLabel) resetLabel.textContent = '再次点击确认恢复';
+      resetTimer = setTimeout(disarmReset, 4000);
+      return;
+    }
+    disarmReset();
     onReset();
     build();
   });

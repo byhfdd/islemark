@@ -3,7 +3,7 @@ import { moveBookmarkNode } from './bookmarks.js';
 
 const ITEM_WIDTH = 92;
 const ITEM_GAP_X = 8;
-const MIN_PANEL_WIDTH = 380;
+const MIN_PANEL_WIDTH = 300;
 const MAX_PANEL_WIDTH = 860;
 const PANEL_PADDING = 44;
 const ROW_HEIGHT = 116;
@@ -77,15 +77,29 @@ export function createFolderPanel({ onOpen, getIconMode, getSettings, onReorder 
     if (onReorder) await onReorder(keepOpen);
   }
 
-  /** 弹层固定在屏幕中央，只限制最大高度；偏移越大，可用高度越小 */
+  /** 弹层顶部跟随搜索框位置，只通过“与搜索框间距”调节两者距离 */
   function place() {
-    const offsetVh = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--folder-y')) || 0;
-    const shift = (Math.abs(offsetVh) * window.innerHeight) / 100;
-    const maxHeight = Math.max(200, Math.min(window.innerHeight * 0.78, window.innerHeight - 56 - shift * 2));
-    panel.style.maxHeight = `${maxHeight}px`;
+    const layout = (getSettings && getSettings() && getSettings().layout) || {};
+    const gapVh = Number(layout.folderGap);
+    const gap = (Number.isFinite(gapVh) ? gapVh : 6) * window.innerHeight / 100;
+
+    let anchorBottom;
+    const searchEl = document.getElementById('searchArea');
+    const topbar = document.querySelector('.topbar');
+    if (searchEl && !document.body.classList.contains('no-search')) {
+      anchorBottom = searchEl.getBoundingClientRect().bottom;
+    } else if (topbar) {
+      anchorBottom = topbar.getBoundingClientRect().bottom;
+    } else {
+      anchorBottom = window.innerHeight * 0.2;
+    }
+
+    const top = Math.max(72, Math.round(anchorBottom + gap));
+    panel.style.top = `${top}px`;
+    panel.style.maxHeight = `${Math.max(240, window.innerHeight - top - 24)}px`;
   }
 
-  /** 列/行数由设置决定：列数决定面板宽度，行数决定每页容量 */
+  /** 列/行数由设置决定；列数决定面板宽度，行数决定每页容量 */
   function folderConfig() {
     const layout = (getSettings && getSettings() && getSettings().layout) || {};
     return {
@@ -97,9 +111,13 @@ export function createFolderPanel({ onOpen, getIconMode, getSettings, onReorder 
   /** 每页容量按配置的列/行计算，超出即翻页而不是滚动 */
   function computeCapacity() {
     const cfg = folderConfig();
+    const folder = stack[stack.length - 1];
+    const total = folder && folder.children ? folder.children.length : 0;
     const availWidth = Math.min(MAX_PANEL_WIDTH, window.innerWidth - 32);
     const maxCols = Math.max(1, Math.floor((availWidth - PANEL_PADDING) / (ITEM_WIDTH + ITEM_GAP_X)));
-    const cols = Math.max(1, Math.min(cfg.cols, maxCols));
+    // 内容少时按实际用到的列数收窄面板，避免右侧留出大块空白
+    const usedCols = Math.min(cfg.cols, Math.max(1, total));
+    const cols = Math.max(1, Math.min(usedCols, maxCols));
     const desiredWidth = cols * ITEM_WIDTH + (cols - 1) * ITEM_GAP_X + PANEL_PADDING;
     const width = Math.min(availWidth, Math.max(MIN_PANEL_WIDTH, desiredWidth));
     panel.style.width = `${width}px`;

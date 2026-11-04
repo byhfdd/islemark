@@ -94,7 +94,7 @@ export const DEFAULT_SETTINGS = {
     iconSize: 100,
     radius: 25,
     opacity: 100,
-    folderY: 0,
+    folderGap: 6,
     folderCols: 4,
     folderRows: 3,
   },
