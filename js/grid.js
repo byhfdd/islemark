@@ -11,6 +11,11 @@ export function createGrid({ viewport, track, onOpen }) {
   let page = 0;
   let pageCount = 1;
   let pagesListener = null;
+  let suppressClick = false;
+
+  function iconMode() {
+    return (settings && settings.features && settings.features.iconMode) || 'favicon';
+  }
 
   function applyLayout() {
     if (!settings) return;
@@ -27,7 +32,14 @@ export function createGrid({ viewport, track, onOpen }) {
     if (totalWidth > available) {
       icon = available / (cols + gapXPct * (cols - 1));
     }
-    icon = Math.max(40, Math.floor(icon));
+
+    // 按窗口高度收缩图标，保证一页内容完整显示，不产生纵向滚动
+    const rect = viewport.getBoundingClientRect();
+    const availableHeight = Math.max(120, window.innerHeight - (rect.top || 260) - 80);
+    const labelHeight = LABEL_GAP + font * 1.3;
+    const heightIcon = (availableHeight - rows * labelHeight) / (rows + (rows - 1) * gapYPct);
+    icon = Math.min(icon, heightIcon);
+    icon = Math.max(32, Math.floor(icon));
 
     const gapX = Math.round(icon * gapXPct);
     const gapY = Math.round(icon * gapYPct);
@@ -55,12 +67,12 @@ export function createGrid({ viewport, track, onOpen }) {
       const items = previewBookmarks(tile.children, 4);
       for (let i = 0; i < 4; i += 1) {
         const cell = el('div', items[i] ? 'mini' : 'mini empty');
-        if (items[i]) cell.appendChild(faviconImg(items[i].url, items[i].title));
+        if (items[i]) cell.appendChild(faviconImg(items[i].url, items[i].title, iconMode()));
         preview.appendChild(cell);
       }
       icon.appendChild(preview);
     } else {
-      icon.appendChild(faviconImg(tile.url, tile.title));
+      icon.appendChild(faviconImg(tile.url, tile.title, iconMode()));
     }
 
     const label = el('span', 'tile-label', tile.title);
@@ -104,11 +116,69 @@ export function createGrid({ viewport, track, onOpen }) {
   }
 
   track.addEventListener('click', (event) => {
+    if (suppressClick) {
+      suppressClick = false;
+      return;
+    }
     const tileEl = event.target.closest('.tile');
     if (!tileEl) return;
     const tile = visibleTiles.find((item) => item.id === tileEl.dataset.tileId);
     if (tile) onOpen(tile);
   });
+
+  // ---------- 鼠标 / 触摸拖拽翻页 ----------
+  const DRAG_LIMIT = 8;
+  let drag = null;
+
+  function endDrag(cancelled) {
+    if (!drag) return;
+    const { dx, moved, pointerId } = drag;
+    drag = null;
+    viewport.classList.remove('dragging');
+    if (viewport.hasPointerCapture && viewport.hasPointerCapture(pointerId)) {
+      viewport.releasePointerCapture(pointerId);
+    }
+    track.style.transition = '';
+    if (cancelled || !moved) {
+      track.style.transform = `translateX(-${page * 100}%)`;
+      return;
+    }
+    suppressClick = true;
+    const threshold = Math.min(80, (viewport.clientWidth || 1) * 0.12);
+    if (dx <= -threshold) setPage(page + 1);
+    else if (dx >= threshold) setPage(page - 1);
+    else setPage(page);
+  }
+
+  viewport.addEventListener('pointerdown', (event) => {
+    if (pageCount <= 1 || event.button !== 0) return;
+    suppressClick = false;
+    drag = { x: event.clientX, y: event.clientY, dx: 0, moved: false, pointerId: event.pointerId };
+    track.style.transition = 'none';
+  });
+
+  viewport.addEventListener('pointermove', (event) => {
+    if (!drag || event.pointerId !== drag.pointerId) return;
+    const dx = event.clientX - drag.x;
+    const dy = event.clientY - drag.y;
+    if (!drag.moved) {
+      if (Math.abs(dx) < DRAG_LIMIT || Math.abs(dx) <= Math.abs(dy)) return;
+      drag.moved = true;
+      viewport.classList.add('dragging');
+      try {
+        viewport.setPointerCapture(event.pointerId);
+      } catch {
+        /* 忽略指针捕获失败 */
+      }
+    }
+    if (event.cancelable) event.preventDefault();
+    drag.dx = dx;
+    const base = -page * (viewport.clientWidth || 0);
+    track.style.transform = `translateX(${base + dx}px)`;
+  });
+
+  viewport.addEventListener('pointerup', () => endDrag(false));
+  viewport.addEventListener('pointercancel', () => endDrag(true));
 
   return {
     setSettings(next) {

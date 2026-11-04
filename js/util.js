@@ -64,15 +64,19 @@ export function letterNode(label) {
 }
 
 /**
- * 生成站点图标；取不到图标时替换为彩色首字母块。
+ * 生成站点图标。
+ * mode 为 'letter' 时直接返回网站名首字块，不发起 favicon 请求，加载更快。
+ * 取不到图标时也回退为彩色首字母块。
  */
-export function faviconImg(url, title) {
+export function faviconImg(url, title, mode = 'favicon') {
+  if (mode === 'letter') return letterNode(title || hostOf(url));
   const src = url ? faviconUrl(url, 64) : null;
   if (!src) return letterNode(title || hostOf(url));
 
   const img = new Image();
   img.alt = '';
   img.decoding = 'async';
+  img.draggable = false;
   img.loading = 'lazy';
   img.src = src;
   img.addEventListener('error', () => {

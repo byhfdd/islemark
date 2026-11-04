@@ -1,12 +1,13 @@
 import { BACKGROUND_PRESETS, FONT_COLORS, LAYOUT_PRESETS } from './constants.js';
-import { el, svgIcon } from './util.js';
+import { el, svgIcon, debounce } from './util.js';
 
-export function createSettingsPanel({ getSettings, onChange, onReset, onWallpaperChange, onRemoveWallpaper }) {
+export function createSettingsPanel({ getSettings, onChange, onReset, onWallpaperChange, onRemoveWallpaper, onExport }) {
   const drawer = document.getElementById('settingsDrawer');
   const scrim = document.getElementById('drawerScrim');
   const body = document.getElementById('drawerBody');
   const closeBtn = document.getElementById('drawerClose');
   const resetBtn = document.getElementById('resetBtn');
+  const exportBtn = document.getElementById('exportBtn');
 
   let settings = getSettings();
   let presetCards = [];
@@ -85,6 +86,24 @@ export function createSettingsPanel({ getSettings, onChange, onReset, onWallpape
     });
 
     field.append(head, input);
+    return field;
+  }
+
+  function createTextarea({ label, hint, placeholder, get, set }) {
+    const field = el('div', 'field');
+    const head = el('div', 'field-head');
+    head.appendChild(el('span', '', label));
+    const area = el('textarea', 'text-area');
+    area.rows = 4;
+    area.placeholder = placeholder || '';
+    area.value = get() || '';
+    const commitSoon = debounce(commit, 300);
+    area.addEventListener('input', () => {
+      set(area.value);
+      commitSoon();
+    });
+    field.append(head, area);
+    if (hint) field.appendChild(el('p', 'field-hint', hint));
     return field;
   }
 
@@ -216,6 +235,138 @@ export function createSettingsPanel({ getSettings, onChange, onReset, onWallpape
         set: (v) => { settings.search.size = v; },
       })
     );
+  }
+
+  function buildEngineSection() {
+    const inner = createSection('搜索引擎');
+    const list = el('div', 'engine-list');
+    const formHost = el('div', 'engine-form-host');
+    inner.append(list, formHost);
+
+    const closeForm = () => formHost.replaceChildren();
+
+    const renderList = () => {
+      list.replaceChildren();
+      (settings.engines || []).forEach((engine) => {
+        const row = el('div', engine.id === settings.engine ? 'engine-row active' : 'engine-row');
+        const dot = el('span', `engine-badge ${engine.cls || 'custom'}`, engine.badge || engine.name.charAt(0));
+        const name = el('span', 'engine-name', engine.name);
+        const actions = el('div', 'engine-actions');
+        if (engine.id === settings.engine) actions.appendChild(el('span', 'engine-current', '使用中'));
+
+        const useBtn = el('button', 'mini-btn small', '使用');
+        useBtn.type = 'button';
+        useBtn.addEventListener('click', () => {
+          settings.engine = engine.id;
+          renderList();
+          commit();
+        });
+
+        const editBtn = el('button', 'icon-btn');
+        editBtn.type = 'button';
+        editBtn.title = '编辑';
+        editBtn.appendChild(svgIcon('i-pencil'));
+        editBtn.addEventListener('click', () => openForm(engine));
+
+        actions.append(useBtn, editBtn);
+
+        const delBtn = el('button', 'icon-btn danger');
+        delBtn.type = 'button';
+        const isLast = (settings.engines || []).length <= 1;
+        delBtn.disabled = isLast;
+        delBtn.title = isLast ? '至少保留一个搜索引擎' : '删除';
+        delBtn.appendChild(svgIcon('i-close'));
+        delBtn.addEventListener('click', () => {
+          if (isLast) return;
+          settings.engines = settings.engines.filter((item) => item.id !== engine.id);
+          if (settings.engine === engine.id) settings.engine = settings.engines[0] ? settings.engines[0].id : '';
+          closeForm();
+          renderList();
+          commit();
+        });
+        actions.appendChild(delBtn);
+
+        row.append(dot, name, actions);
+        list.appendChild(row);
+      });
+    };
+
+    function openForm(engine) {
+      formHost.replaceChildren();
+      const form = el('div', 'engine-form');
+      const title = el('div', 'engine-form-title', engine ? '编辑搜索引擎' : '添加搜索引擎');
+
+      const nameInput = el('input', 'text-input');
+      nameInput.type = 'text';
+      nameInput.placeholder = '名称，例如 知乎搜索';
+      nameInput.value = engine ? engine.name : '';
+
+      const urlInput = el('input', 'text-input');
+      urlInput.type = 'text';
+      urlInput.placeholder = 'https://www.example.com/search?q={q}';
+      urlInput.value = engine ? engine.urlTemplate : '';
+
+      const hint = el('p', 'engine-form-hint', '地址中的 {q} 会被替换为搜索关键词。');
+      const error = el('p', 'engine-form-error');
+
+      const actions = el('div', 'engine-form-actions');
+      const saveBtn = el('button', 'mini-btn small primary', '保存');
+      saveBtn.type = 'button';
+      const cancelBtn = el('button', 'mini-btn small', '取消');
+      cancelBtn.type = 'button';
+      actions.append(saveBtn, cancelBtn);
+
+      saveBtn.addEventListener('click', () => {
+        const name = nameInput.value.trim();
+        const template = urlInput.value.trim();
+        error.textContent = '';
+        if (!name) {
+          error.textContent = '请填写名称';
+          return;
+        }
+        if (!/^https?:\/\//i.test(template)) {
+          error.textContent = '地址需要以 http:// 或 https:// 开头';
+          return;
+        }
+        if (!template.includes('{q}')) {
+          error.textContent = '地址中需要包含 {q} 占位符';
+          return;
+        }
+
+        if (engine) {
+          engine.name = name;
+          engine.badge = name.charAt(0);
+          engine.urlTemplate = template;
+        } else {
+          const item = {
+            id: `custom-${Date.now()}`,
+            name,
+            badge: name.charAt(0),
+            cls: 'custom',
+            urlTemplate: template,
+            builtin: false,
+          };
+          settings.engines.push(item);
+          if (!settings.engine) settings.engine = item.id;
+        }
+        closeForm();
+        renderList();
+        commit();
+      });
+      cancelBtn.addEventListener('click', closeForm);
+
+      form.append(title, nameInput, urlInput, hint, error, actions);
+      formHost.appendChild(form);
+      nameInput.focus();
+    }
+
+    const addBtn = el('button', 'mini-btn small add-engine', '+ 添加搜索引擎');
+    addBtn.type = 'button';
+    addBtn.addEventListener('click', () => openForm(null));
+    const hint = el('p', 'engine-form-hint', '内置引擎也可以删除，但至少保留一个。');
+    inner.insertBefore(hint, formHost);
+    inner.insertBefore(addBtn, formHost);
+    renderList();
   }
 
   function buildFontSection() {
@@ -380,6 +531,20 @@ export function createSettingsPanel({ getSettings, onChange, onReset, onWallpape
     inner.appendChild(createToggle('显示时钟与日期', null, () => settings.features.clock, (v) => { settings.features.clock = v; }));
     inner.appendChild(createToggle('显示每日一言', null, () => settings.features.quote, (v) => { settings.features.quote = v; }));
     inner.appendChild(
+      createTextarea({
+        label: '每日一言内容',
+        hint: '每行一条，留空则使用内置文案。',
+        placeholder: '每天换一句，例如：\n慢慢来，比较快。',
+        get: () => (settings.features.quotes || []).join('\n'),
+        set: (value) => {
+          settings.features.quotes = String(value)
+            .split('\n')
+            .map((line) => line.trim())
+            .filter(Boolean);
+        },
+      })
+    );
+    inner.appendChild(
       createToggle('在新标签页打开书签', '关闭时在当前标签页跳转', () => settings.features.openInNewTab, (v) => {
         settings.features.openInNewTab = v;
       })
@@ -387,6 +552,11 @@ export function createSettingsPanel({ getSettings, onChange, onReset, onWallpape
     inner.appendChild(
       createToggle('合并“其他书签”文件夹', '显示为一个独立分组', () => settings.features.showOtherBookmarks, (v) => {
         settings.features.showOtherBookmarks = v;
+      })
+    );
+    inner.appendChild(
+      createToggle('显示网站图标', '关闭后显示网站名首字，不加载图标资源，打开更快', () => settings.features.iconMode !== 'letter', (v) => {
+        settings.features.iconMode = v ? 'favicon' : 'letter';
       })
     );
 
@@ -403,6 +573,7 @@ export function createSettingsPanel({ getSettings, onChange, onReset, onWallpape
 
     buildLayoutSection();
     buildSearchSection();
+    buildEngineSection();
     buildFontSection();
     buildBackgroundSection();
     buildOtherSection();
@@ -423,6 +594,9 @@ export function createSettingsPanel({ getSettings, onChange, onReset, onWallpape
 
   closeBtn.addEventListener('click', close);
   scrim.addEventListener('click', close);
+  exportBtn.addEventListener('click', () => {
+    if (onExport) onExport();
+  });
   resetBtn.addEventListener('click', () => {
     onReset();
     build();

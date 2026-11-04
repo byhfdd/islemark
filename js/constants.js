@@ -1,3 +1,42 @@
+export const ENGINE_DEFS = [
+  {
+    id: 'bing',
+    name: 'Bing',
+    badge: 'b',
+    cls: 'bing',
+    urlTemplate: 'https://www.bing.com/search?q={q}',
+    builtin: true,
+  },
+  {
+    id: 'google',
+    name: 'Google',
+    badge: 'G',
+    cls: 'google',
+    urlTemplate: 'https://www.google.com/search?q={q}',
+    builtin: true,
+  },
+  {
+    id: 'baidu',
+    name: '百度',
+    badge: '百',
+    cls: 'baidu',
+    urlTemplate: 'https://www.baidu.com/s?wd={q}',
+    builtin: true,
+  },
+  {
+    id: 'duckduckgo',
+    name: 'DuckDuckGo',
+    badge: 'D',
+    cls: 'duckduckgo',
+    urlTemplate: 'https://duckduckgo.com/?q={q}',
+    builtin: true,
+  },
+];
+
+export function cloneEngineDefs() {
+  return ENGINE_DEFS.map((engine) => ({ ...engine }));
+}
+
 export const DEFAULT_SETTINGS = {
   layoutPreset: 'custom',
   layout: {
@@ -36,8 +75,11 @@ export const DEFAULT_SETTINGS = {
     quote: true,
     openInNewTab: false,
     showOtherBookmarks: true,
+    iconMode: 'favicon',
+    quotes: [],
   },
   engine: 'bing',
+  engines: cloneEngineDefs(),
 };
 
 export const LAYOUT_PRESETS = [
@@ -46,37 +88,6 @@ export const LAYOUT_PRESETS = [
   { id: '2x6', rows: 2, cols: 6 },
   { id: '2x7', rows: 2, cols: 7 },
   { id: '3x3', rows: 3, cols: 3 },
-];
-
-export const ENGINES = [
-  {
-    id: 'bing',
-    name: 'Bing',
-    badge: 'b',
-    cls: 'bing',
-    url: (q) => `https://www.bing.com/search?q=${encodeURIComponent(q)}`,
-  },
-  {
-    id: 'google',
-    name: 'Google',
-    badge: 'G',
-    cls: 'google',
-    url: (q) => `https://www.google.com/search?q=${encodeURIComponent(q)}`,
-  },
-  {
-    id: 'baidu',
-    name: '百度',
-    badge: '百',
-    cls: 'baidu',
-    url: (q) => `https://www.baidu.com/s?wd=${encodeURIComponent(q)}`,
-  },
-  {
-    id: 'duckduckgo',
-    name: 'DuckDuckGo',
-    badge: 'D',
-    cls: 'duckduckgo',
-    url: (q) => `https://duckduckgo.com/?q=${encodeURIComponent(q)}`,
-  },
 ];
 
 export const BACKGROUND_PRESETS = [

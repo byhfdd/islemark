@@ -17,10 +17,12 @@ const dom = {
   page: document.querySelector('.page'),
   bg: document.getElementById('bg'),
   bgDim: document.getElementById('bgDim'),
-  searchArea: document.getElementById('searchArea'),
   gridViewport: document.getElementById('gridViewport'),
   gridTrack: document.getElementById('gridTrack'),
+  gridPager: document.getElementById('gridPager'),
   dots: document.getElementById('dots'),
+  pagePrev: document.getElementById('pagePrev'),
+  pageNext: document.getElementById('pageNext'),
   empty: document.getElementById('emptyState'),
   emptyTitle: document.querySelector('.empty-title'),
   emptyDesc: document.querySelector('.empty-desc'),
@@ -30,7 +32,6 @@ const dom = {
   clockTime: document.getElementById('clockTime'),
   clockDate: document.getElementById('clockDate'),
   clockQuote: document.getElementById('clockQuote'),
-  homeBtn: document.getElementById('homeBtn'),
   menuBtn: document.getElementById('menuBtn'),
 };
 
@@ -40,15 +41,17 @@ const grid = createGrid({
   onOpen: (tile) => {
     search.closeMenus();
     if (tile.type === 'folder') {
-      const anchor = state.settings.search.hidden ? document.querySelector('.topbar') : dom.searchArea;
-      folderPanel.open(tile, anchor.getBoundingClientRect());
+      folderPanel.open(tile);
     } else {
       openUrl(tile.url);
     }
   },
 });
 
-const folderPanel = createFolderPanel({ onOpen: (tile) => openUrl(tile.url) });
+const folderPanel = createFolderPanel({
+  onOpen: (tile) => openUrl(tile.url),
+  getIconMode: () => state.settings.features.iconMode,
+});
 
 let search = null;
 let settingsPanel = null;
@@ -85,9 +88,13 @@ function applyBackground() {
     bg.style.backgroundColor = config.color;
   } else {
     const preset = BACKGROUND_PRESETS.find((item) => item.id === config.preset) || BACKGROUND_PRESETS[0];
-    bg.style.backgroundImage = 'none';
-    bg.style.background = preset.css;
+    bg.style.backgroundImage = preset.css;
+    bg.style.backgroundColor = '#0f1115';
   }
+  // 明确设置铺满与居中，避免切换背景后 background 简写重置尺寸
+  bg.style.backgroundSize = 'cover';
+  bg.style.backgroundPosition = 'center center';
+  bg.style.backgroundRepeat = 'no-repeat';
   bg.style.filter = config.blur > 0 ? `blur(${config.blur}px)` : 'none';
   bg.style.transform = config.blur > 0 ? 'scale(1.06)' : 'none';
   dom.bgDim.style.opacity = String(config.dim / 100);
@@ -101,8 +108,10 @@ function updateClock() {
   const minutes = String(now.getMinutes()).padStart(2, '0');
   dom.clockTime.textContent = `${hours}:${minutes}`;
   dom.clockDate.textContent = `${now.getMonth() + 1}月${now.getDate()}日 ${WEEKDAYS[now.getDay()]}`;
-  const dayIndex = Math.floor(now.getTime() / 86400000) % QUOTES.length;
-  dom.clockQuote.textContent = QUOTES[dayIndex];
+  const dayIndex = Math.floor(now.getTime() / 86400000);
+  const custom = state.settings.features.quotes;
+  const list = Array.isArray(custom) && custom.length ? custom : QUOTES;
+  dom.clockQuote.textContent = list[dayIndex % list.length];
 }
 
 function applyClock() {
@@ -114,7 +123,9 @@ function applyClock() {
 }
 
 function renderDots(pages, current) {
-  dom.dots.hidden = pages <= 1;
+  dom.gridPager.hidden = pages <= 1;
+  dom.pagePrev.disabled = current <= 0;
+  dom.pageNext.disabled = current >= pages - 1;
   dom.dots.replaceChildren();
   for (let i = 0; i < pages; i += 1) {
     const dot = document.createElement('button');
@@ -207,6 +218,25 @@ async function onReset() {
   refreshBookmarks();
 }
 
+function exportConfig() {
+  const payload = {
+    format: 'bookmark-newtab-config',
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    settings: JSON.parse(JSON.stringify(state.settings)),
+    wallpaper: state.wallpaper || null,
+  };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `bookmark-newtab-config-${new Date().toISOString().slice(0, 10)}.json`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
 async function init() {
   state.settings = await loadSettings();
   state.wallpaper = await loadWallpaper();
@@ -229,17 +259,15 @@ async function init() {
     onReset,
     onWallpaperChange,
     onRemoveWallpaper,
+    onExport: exportConfig,
   });
 
   applyAll();
   grid.onPagesChange(renderDots);
 
   dom.menuBtn.addEventListener('click', () => settingsPanel.open());
-  dom.homeBtn.addEventListener('click', () => {
-    search.clear();
-    folderPanel.close();
-    refreshBookmarks();
-  });
+  dom.pagePrev.addEventListener('click', () => grid.stepPage(-1));
+  dom.pageNext.addEventListener('click', () => grid.stepPage(1));
   dom.emptyRefresh.addEventListener('click', () => refreshBookmarks());
 
   await refreshBookmarks();

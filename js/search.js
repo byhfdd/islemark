@@ -1,4 +1,3 @@
-import { ENGINES } from './constants.js';
 import { findBookmarks } from './bookmarks.js';
 import { el, hostOf, faviconImg, svgIcon, debounce } from './util.js';
 import { loadLastQuery, saveLastQuery } from './store.js';
@@ -22,14 +21,27 @@ export function createSearch({ getTiles, getSettings, onQuery, onOpen, onEngineC
   }, 250);
 
   function currentEngine() {
-    return ENGINES.find((engine) => engine.id === settings.engine) || ENGINES[0];
+    const list = settings.engines || [];
+    return list.find((engine) => engine.id === settings.engine) || list[0] || {
+      id: 'bing',
+      name: 'Bing',
+      badge: 'b',
+      cls: 'bing',
+      urlTemplate: 'https://www.bing.com/search?q={q}',
+    };
+  }
+
+  function engineUrl(engine, query) {
+    const template = engine.urlTemplate || 'https://www.bing.com/search?q={q}';
+    if (template.includes('{q}')) return template.replace('{q}', encodeURIComponent(query));
+    return `${template}${encodeURIComponent(query)}`;
   }
 
   function sync() {
     settings = getSettings();
     const engine = currentEngine();
-    badge.textContent = engine.badge;
-    badge.className = `engine-badge ${engine.cls}`;
+    badge.textContent = engine.badge || engine.name.charAt(0);
+    badge.className = `engine-badge ${engine.cls || 'custom'}`;
     input.placeholder = '输入并搜索';
     suggestBox.hidden = true;
     document.body.classList.toggle('hide-submit', settings.search.hideButton);
@@ -77,7 +89,7 @@ export function createSearch({ getTiles, getSettings, onQuery, onOpen, onEngineC
       if (item.kind === 'search') {
         fav.appendChild(svgIcon('i-search'));
       } else {
-        fav.appendChild(faviconImg(item.data.url, item.data.title));
+        fav.appendChild(faviconImg(item.data.url, item.data.title, settings.features.iconMode));
       }
 
       const main = el('div', 'suggest-main');
@@ -121,7 +133,7 @@ export function createSearch({ getTiles, getSettings, onQuery, onOpen, onEngineC
       input.focus();
       return;
     }
-    window.location.href = currentEngine().url(query);
+    window.location.href = engineUrl(currentEngine(), query);
   }
 
   function choose(index) {
@@ -139,10 +151,10 @@ export function createSearch({ getTiles, getSettings, onQuery, onOpen, onEngineC
   function buildEngineMenu() {
     closeEngineMenu();
     const menu = el('div', 'engine-menu');
-    ENGINES.forEach((engine) => {
+    (settings.engines || []).forEach((engine) => {
       const btn = el('button', engine.id === settings.engine ? 'engine-item active' : 'engine-item');
       btn.type = 'button';
-      const dot = el('span', `engine-badge ${engine.cls}`, engine.badge);
+      const dot = el('span', `engine-badge ${engine.cls || 'custom'}`, engine.badge || engine.name.charAt(0));
       btn.append(dot, el('span', '', engine.name));
       btn.addEventListener('click', () => {
         settings.engine = engine.id;
