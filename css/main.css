@@ -956,11 +956,12 @@ body.hide-engine .search-shell {
 
 .folder-page {
   flex: 0 0 100%;
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-start;
-  align-content: flex-start;
-  gap: 20px 8px;
+  display: grid;
+  grid-template-columns: repeat(var(--folder-cols, 4), 92px);
+  column-gap: 8px;
+  row-gap: 20px;
+  justify-content: start;
+  align-content: start;
   padding: 20px 22px 18px;
   min-height: var(--folder-page-min, 0px);
 }

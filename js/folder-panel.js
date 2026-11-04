@@ -5,7 +5,7 @@ const ITEM_WIDTH = 92;
 const ITEM_GAP_X = 8;
 const MIN_PANEL_WIDTH = 300;
 const MAX_PANEL_WIDTH = 860;
-const PANEL_PADDING = 44;
+const PANEL_PADDING = 46; // 左右内边距 44 + 面板边框 2，保证整列能铺满
 const ROW_HEIGHT = 116;
 const PANEL_CHROME = 150;
 const DROP_CLASSES = ['drop-before', 'drop-after', 'drop-inside'];
@@ -110,6 +110,7 @@ export function createFolderPanel({ onOpen, getIconMode, getSettings, onReorder 
     const fitRows = Math.max(1, Math.floor((maxHeight - PANEL_CHROME) / ROW_HEIGHT));
     const rows = Math.max(1, Math.min(cfg.rows, fitRows));
     capacity = cols * rows;
+    trackEl.style.setProperty('--folder-cols', String(cols));
     trackEl.style.setProperty('--folder-page-min', `${rows * ROW_HEIGHT}px`);
   }
 
