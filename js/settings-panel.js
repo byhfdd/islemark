@@ -221,7 +221,7 @@ export function createSettingsPanel({ getSettings, onChange, onReset, onWallpape
     );
     inner.appendChild(
       createSlider({
-        label: '文件夹垂直位置', min: -20, max: 20, step: 1, unit: 'vh',
+        label: '文件夹垂直位置', min: -30, max: 30, step: 1, unit: 'vh',
         get: () => settings.layout.folderY,
         set: (v) => { settings.layout.folderY = v; },
       })

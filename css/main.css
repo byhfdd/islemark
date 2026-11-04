@@ -825,8 +825,8 @@ body.hide-engine .search-shell {
   position: fixed;
   z-index: 65;
   left: 50%;
-  top: calc(50% + var(--folder-y, 0vh));
-  transform: translate(-50%, -50%);
+  top: 50%;
+  transform: translate(-50%, calc(-50% + var(--folder-y, 0vh)));
   width: min(780px, calc(100vw - 32px));
   display: flex;
   flex-direction: column;
@@ -841,8 +841,8 @@ body.hide-engine .search-shell {
 }
 
 @keyframes popIn {
-  from { opacity: 0; transform: translate(-50%, calc(-50% - 10px)) scale(0.98); }
-  to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  from { opacity: 0; transform: translate(-50%, calc(-50% + var(--folder-y, 0vh) - 10px)) scale(0.98); }
+  to { opacity: 1; transform: translate(-50%, calc(-50% + var(--folder-y, 0vh))) scale(1); }
 }
 
 .folder-head {
@@ -904,10 +904,11 @@ body.hide-engine .search-shell {
 
 .folder-page {
   flex: 0 0 100%;
-  display: grid;
-  grid-auto-rows: min-content;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-content: flex-start;
   gap: 20px 8px;
-  align-content: start;
   padding: 20px 22px 18px;
 }
 
@@ -962,6 +963,7 @@ body.hide-engine .search-shell {
 }
 
 .fp-item {
+  width: 92px;
   display: flex;
   flex-direction: column;
   align-items: center;

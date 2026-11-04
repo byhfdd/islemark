@@ -10,6 +10,7 @@ export function createGrid({ viewport, track, onOpen, onReorder }) {
   let page = 0;
   let pageCount = 1;
   let pagesListener = null;
+  let layoutSignature = null;
   let suppressClick = false;
   let dragPayload = null;
 
@@ -293,8 +294,14 @@ export function createGrid({ viewport, track, onOpen, onReorder }) {
   return {
     setSettings(next) {
       settings = next;
-      applyLayout();
-      render();
+      // 设置对象是原地修改的，用签名比较判断是否需要重建页面
+      const signature = `${next.layout.rows}|${next.layout.cols}|${next.features.iconMode}`;
+      if (signature !== layoutSignature) {
+        layoutSignature = signature;
+        render();
+      } else {
+        applyLayout();
+      }
     },
     setData(tiles) {
       visibleTiles = tiles || [];

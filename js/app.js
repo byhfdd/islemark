@@ -92,6 +92,7 @@ function applyPositions() {
   const root = document.documentElement;
   root.style.setProperty('--search-y', `${state.settings.search.offsetY}vh`);
   root.style.setProperty('--folder-y', `${state.settings.layout.folderY}vh`);
+  if (folderPanel.isOpen()) folderPanel.reflow();
 }
 
 function applyBackground() {

@@ -2,6 +2,10 @@ import { el, faviconImg, svgIcon } from './util.js';
 import { moveBookmarkNode } from './bookmarks.js';
 
 const ITEM_WIDTH = 92;
+const ITEM_GAP_X = 8;
+const MIN_PANEL_WIDTH = 380;
+const MAX_PANEL_WIDTH = 780;
+const PANEL_PADDING = 44;
 const ROW_HEIGHT = 116;
 const PANEL_CHROME = 150;
 
@@ -22,7 +26,6 @@ export function createFolderPanel({ onOpen, getIconMode, onReorder }) {
   let page = 0;
   let pages = 1;
   let capacity = 12;
-  let columns = 6;
   let skipClick = false;
   let dragPayload = null;
 
@@ -60,18 +63,26 @@ export function createFolderPanel({ onOpen, getIconMode, onReorder }) {
   function place() {
     const offsetVh = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--folder-y')) || 0;
     const shift = (Math.abs(offsetVh) * window.innerHeight) / 100;
-    const maxHeight = Math.max(240, Math.min(window.innerHeight * 0.78, window.innerHeight - 56 - shift * 2));
+    const maxHeight = Math.max(200, Math.min(window.innerHeight * 0.78, window.innerHeight - 56 - shift * 2));
     panel.style.maxHeight = `${maxHeight}px`;
   }
 
   /** 每页容量按面板宽度与可用高度计算，超出即翻页而不是滚动 */
   function computeCapacity() {
-    const width = panel.clientWidth || 720;
-    const cols = Math.max(3, Math.floor((width - 44) / ITEM_WIDTH));
+    const folder = stack[stack.length - 1];
+    const total = folder && folder.children ? folder.children.length : 0;
+    const availWidth = Math.min(MAX_PANEL_WIDTH, window.innerWidth - 32);
+    const maxCols = Math.max(3, Math.floor((availWidth - PANEL_PADDING) / (ITEM_WIDTH + ITEM_GAP_X)));
+    // 按内容数量选择列数，避免少书签时只铺成很长的一排
+    const idealCols = Math.max(3, Math.ceil(Math.sqrt(Math.max(1, total))));
+    const cols = Math.min(maxCols, idealCols);
+    const desiredWidth = cols * ITEM_WIDTH + (cols - 1) * ITEM_GAP_X + PANEL_PADDING;
+    const width = Math.min(availWidth, Math.max(MIN_PANEL_WIDTH, desiredWidth));
+    panel.style.width = `${width}px`;
+
     const maxHeight = parseFloat(panel.style.maxHeight) || window.innerHeight * 0.72;
     const available = Math.max(150, maxHeight - PANEL_CHROME);
     const rows = Math.max(1, Math.min(5, Math.floor(available / ROW_HEIGHT)));
-    columns = cols;
     capacity = cols * rows;
   }
 
@@ -117,7 +128,6 @@ export function createFolderPanel({ onOpen, getIconMode, onReorder }) {
 
     if (!children.length) {
       const emptyPage = el('div', 'folder-page');
-      emptyPage.style.gridTemplateColumns = `repeat(${columns}, minmax(0, 1fr))`;
       emptyPage.appendChild(el('div', 'folder-empty', '这个文件夹还没有书签'));
       trackEl.appendChild(emptyPage);
       pages = 1;
@@ -129,7 +139,6 @@ export function createFolderPanel({ onOpen, getIconMode, onReorder }) {
 
     for (let i = 0; i < pages; i += 1) {
       const pageEl = el('div', 'folder-page');
-      pageEl.style.gridTemplateColumns = `repeat(${columns}, minmax(0, 1fr))`;
       children.slice(i * capacity, i * capacity + capacity).forEach((child) => {
       const btn = el('button', 'fp-item');
       btn.type = 'button';
@@ -354,5 +363,5 @@ export function createFolderPanel({ onOpen, getIconMode, onReorder }) {
     render();
   });
 
-  return { open, close, isOpen: () => opened };
+  return { open, close, place, reflow() { if (opened) { place(); render(); } }, isOpen: () => opened };
 }
