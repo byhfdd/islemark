@@ -265,6 +265,125 @@ export function createSettingsPanel({ getSettings, onChange, onReset, onWallpape
     );
   }
 
+  function buildQuickSearchSection() {
+    const inner = createSection('快捷搜索');
+    const list = el('div', 'engine-list');
+    const formHost = el('div', 'engine-form-host');
+    inner.append(list, formHost);
+
+    const closeForm = () => formHost.replaceChildren();
+
+    const renderList = () => {
+      list.replaceChildren();
+      const items = settings.search.quickSearches || [];
+      if (!items.length) {
+        list.appendChild(el('p', 'engine-form-hint', '还没有快捷搜索，添加后会显示在搜索建议最上方。'));
+        return;
+      }
+      items.forEach((quick) => {
+        const row = el('div', 'engine-row');
+        const dot = el('span', 'engine-badge custom', quick.badge || quick.name.charAt(0));
+        const name = el('span', 'engine-name', quick.name);
+        const actions = el('div', 'engine-actions');
+
+        const editBtn = el('button', 'icon-btn');
+        editBtn.type = 'button';
+        editBtn.title = '编辑';
+        editBtn.appendChild(svgIcon('i-pencil'));
+        editBtn.addEventListener('click', () => openForm(quick));
+
+        const delBtn = el('button', 'icon-btn danger');
+        delBtn.type = 'button';
+        delBtn.title = '删除';
+        delBtn.appendChild(svgIcon('i-close'));
+        delBtn.addEventListener('click', () => {
+          settings.search.quickSearches = items.filter((item) => item.id !== quick.id);
+          closeForm();
+          renderList();
+          commit();
+        });
+
+        actions.append(editBtn, delBtn);
+        row.append(dot, name, actions);
+        list.appendChild(row);
+      });
+    };
+
+    function openForm(quick) {
+      formHost.replaceChildren();
+      const form = el('div', 'engine-form');
+      const title = el('div', 'engine-form-title', quick ? '编辑快捷搜索' : '添加快捷搜索');
+
+      const nameInput = el('input', 'text-input');
+      nameInput.type = 'text';
+      nameInput.placeholder = '名称，例如 知乎';
+      nameInput.value = quick ? quick.name : '';
+
+      const urlInput = el('input', 'text-input');
+      urlInput.type = 'text';
+      urlInput.placeholder = 'https://www.example.com/search?q={q}';
+      urlInput.value = quick ? quick.urlTemplate : '';
+
+      const hint = el('p', 'engine-form-hint', '地址中的 {q} 会被替换为搜索关键词。');
+      const error = el('p', 'engine-form-error');
+
+      const actions = el('div', 'engine-form-actions');
+      const saveBtn = el('button', 'mini-btn small primary', '保存');
+      saveBtn.type = 'button';
+      const cancelBtn = el('button', 'mini-btn small', '取消');
+      cancelBtn.type = 'button';
+      actions.append(saveBtn, cancelBtn);
+
+      saveBtn.addEventListener('click', () => {
+        const name = nameInput.value.trim();
+        const template = urlInput.value.trim();
+        error.textContent = '';
+        if (!name) {
+          error.textContent = '请填写名称';
+          return;
+        }
+        if (!/^https?:\/\//i.test(template)) {
+          error.textContent = '地址需要以 http:// 或 https:// 开头';
+          return;
+        }
+        if (!template.includes('{q}')) {
+          error.textContent = '地址中需要包含 {q} 占位符';
+          return;
+        }
+
+        if (!Array.isArray(settings.search.quickSearches)) settings.search.quickSearches = [];
+        if (quick) {
+          quick.name = name;
+          quick.badge = name.charAt(0);
+          quick.urlTemplate = template;
+        } else {
+          settings.search.quickSearches.push({
+            id: `quick-${Date.now()}`,
+            name,
+            badge: name.charAt(0),
+            urlTemplate: template,
+          });
+        }
+        closeForm();
+        renderList();
+        commit();
+      });
+      cancelBtn.addEventListener('click', closeForm);
+
+      form.append(title, nameInput, urlInput, hint, error, actions);
+      formHost.appendChild(form);
+      nameInput.focus();
+    }
+
+    const addBtn = el('button', 'mini-btn small add-engine', '+ 添加快捷搜索');
+    addBtn.type = 'button';
+    addBtn.addEventListener('click', () => openForm(null));
+    const hint = el('p', 'engine-form-hint', '快捷搜索展示在搜索建议最上方，与自定义搜索引擎相互独立。');
+    inner.insertBefore(hint, formHost);
+    inner.insertBefore(addBtn, formHost);
+    renderList();
+  }
+
   function buildEngineSection() {
     const inner = createSection('搜索引擎');
     const list = el('div', 'engine-list');
@@ -616,6 +735,7 @@ export function createSettingsPanel({ getSettings, onChange, onReset, onWallpape
 
     buildLayoutSection();
     buildSearchSection();
+    buildQuickSearchSection();
     buildEngineSection();
     buildFontSection();
     buildBackgroundSection();

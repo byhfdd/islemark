@@ -106,6 +106,8 @@ export const DEFAULT_SETTINGS = {
     hideButton: false,
     size: 150,
     offsetY: 7,
+    /** 搜索建议顶部的快捷搜索，与自定义搜索引擎相互独立 */
+    quickSearches: [],
   },
   font: {
     shadow: false,

@@ -31,13 +31,13 @@ export function createSearch({ getTiles, getSettings, onOpen, onEngineChange }) 
     };
   }
 
-  /** 用户在设置中新增的搜索引擎，用于在建议列表顶部提供快捷搜索 */
-  function customEngines() {
-    return (settings.engines || []).filter((engine) => !engine.builtin);
+  /** 搜索建议顶部的快捷搜索，独立于搜索引擎配置 */
+  function quickSearches() {
+    return settings.search.quickSearches || [];
   }
 
-  function engineUrl(engine, query) {
-    const template = engine.urlTemplate || 'https://www.bing.com/search?q={q}';
+  function searchUrl(provider, query) {
+    const template = provider.urlTemplate || 'https://www.bing.com/search?q={q}';
     if (template.includes('{q}')) return template.replace('{q}', encodeURIComponent(query));
     return `${template}${encodeURIComponent(query)}`;
   }
@@ -88,14 +88,14 @@ export function createSearch({ getTiles, getSettings, onOpen, onEngineChange }) 
     }
 
     items.forEach((item, index) => {
-      const isSearch = item.kind === 'search' || item.kind === 'engine';
+      const isSearch = item.kind === 'search' || item.kind === 'quick';
       const row = el('div', isSearch ? 'suggest-item is-search' : 'suggest-item');
 
       const fav = el('div', 'suggest-fav');
-      if (item.kind === 'engine') {
-        fav.classList.add('is-engine');
+      if (item.kind === 'quick') {
+        fav.classList.add('is-quick');
         fav.appendChild(
-          el('span', `engine-badge ${item.engine.cls || 'custom'}`, item.engine.badge || item.engine.name.charAt(0))
+          el('span', 'engine-badge custom', item.quick.badge || item.quick.name.charAt(0))
         );
       } else if (item.kind === 'search') {
         fav.appendChild(svgIcon('i-search'));
@@ -106,11 +106,11 @@ export function createSearch({ getTiles, getSettings, onOpen, onEngineChange }) 
       const main = el('div', 'suggest-main');
       let titleText = item.data ? item.data.title : '';
       if (item.kind === 'search') titleText = `在 ${currentEngine().name} 中搜索 “${item.query}”`;
-      if (item.kind === 'engine') titleText = `在 ${item.engine.name} 中搜索 “${item.query}”`;
+      if (item.kind === 'quick') titleText = `在 ${item.quick.name} 中搜索 “${item.query}”`;
       const title = el('div', 'suggest-title', titleText);
       main.appendChild(title);
-      if (item.kind === 'engine') {
-        main.appendChild(el('div', 'suggest-host', '自定义搜索'));
+      if (item.kind === 'quick') {
+        main.appendChild(el('div', 'suggest-host', '快捷搜索'));
       } else if (item.kind === 'bookmark') {
         const sub = item.data.path ? `${item.data.path} · ${hostOf(item.data.url)}` : hostOf(item.data.url);
         main.appendChild(el('div', 'suggest-host', sub));
@@ -133,14 +133,11 @@ export function createSearch({ getTiles, getSettings, onOpen, onEngineChange }) 
       closeSuggest();
       return;
     }
-    // 自定义搜索置于最上方，按向下键即可优先选中
-    items = customEngines().map((engine) => ({ kind: 'engine', engine, query }));
+    // 快捷搜索置于最上方，按向下键即可优先选中
+    items = quickSearches().map((quick) => ({ kind: 'quick', quick, query }));
     const matches = findBookmarks(getTiles(), query, 8);
     items.push(...matches.map((bookmark) => ({ kind: 'bookmark', data: bookmark })));
-    // 当前引擎已在顶部时不再重复展示通用搜索项
-    if (!items.some((item) => item.kind === 'engine' && item.engine.id === currentEngine().id)) {
-      items.push({ kind: 'search', query });
-    }
+    items.push({ kind: 'search', query });
     renderSuggestions();
   }
 
@@ -150,7 +147,7 @@ export function createSearch({ getTiles, getSettings, onOpen, onEngineChange }) 
       input.focus();
       return;
     }
-    window.location.href = engineUrl(currentEngine(), query);
+    window.location.href = searchUrl(currentEngine(), query);
   }
 
   function choose(index) {
@@ -160,8 +157,8 @@ export function createSearch({ getTiles, getSettings, onOpen, onEngineChange }) 
       const url = item.data.url;
       closeMenus();
       onOpen(url);
-    } else if (item.kind === 'engine') {
-      window.location.href = engineUrl(item.engine, item.query);
+    } else if (item.kind === 'quick') {
+      window.location.href = searchUrl(item.quick, item.query);
     } else {
       goSearch();
     }
