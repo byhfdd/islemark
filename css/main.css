@@ -509,6 +509,16 @@ body.hide-engine .search-shell {
   stroke-width: 1.9;
 }
 
+.suggest-fav.is-engine {
+  background: transparent;
+}
+
+.suggest-fav .engine-badge {
+  width: 24px;
+  height: 24px;
+  font-size: 15px;
+}
+
 .suggest-main {
   min-width: 0;
   flex: 1;

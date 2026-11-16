@@ -31,6 +31,11 @@ export function createSearch({ getTiles, getSettings, onOpen, onEngineChange }) 
     };
   }
 
+  /** 用户在设置中新增的搜索引擎，用于在建议列表顶部提供快捷搜索 */
+  function customEngines() {
+    return (settings.engines || []).filter((engine) => !engine.builtin);
+  }
+
   function engineUrl(engine, query) {
     const template = engine.urlTemplate || 'https://www.bing.com/search?q={q}';
     if (template.includes('{q}')) return template.replace('{q}', encodeURIComponent(query));
@@ -83,23 +88,30 @@ export function createSearch({ getTiles, getSettings, onOpen, onEngineChange }) 
     }
 
     items.forEach((item, index) => {
-      const row = el('div', item.kind === 'search' ? 'suggest-item is-search' : 'suggest-item');
+      const isSearch = item.kind === 'search' || item.kind === 'engine';
+      const row = el('div', isSearch ? 'suggest-item is-search' : 'suggest-item');
 
       const fav = el('div', 'suggest-fav');
-      if (item.kind === 'search') {
+      if (item.kind === 'engine') {
+        fav.classList.add('is-engine');
+        fav.appendChild(
+          el('span', `engine-badge ${item.engine.cls || 'custom'}`, item.engine.badge || item.engine.name.charAt(0))
+        );
+      } else if (item.kind === 'search') {
         fav.appendChild(svgIcon('i-search'));
       } else {
         fav.appendChild(faviconImg(item.data.url, item.data.title, settings.features.iconMode));
       }
 
       const main = el('div', 'suggest-main');
-      const title = el(
-        'div',
-        'suggest-title',
-        item.kind === 'search' ? `在 ${currentEngine().name} 中搜索 “${item.query}”` : item.data.title
-      );
+      let titleText = item.data ? item.data.title : '';
+      if (item.kind === 'search') titleText = `在 ${currentEngine().name} 中搜索 “${item.query}”`;
+      if (item.kind === 'engine') titleText = `在 ${item.engine.name} 中搜索 “${item.query}”`;
+      const title = el('div', 'suggest-title', titleText);
       main.appendChild(title);
-      if (item.kind !== 'search') {
+      if (item.kind === 'engine') {
+        main.appendChild(el('div', 'suggest-host', '自定义搜索'));
+      } else if (item.kind === 'bookmark') {
         const sub = item.data.path ? `${item.data.path} · ${hostOf(item.data.url)}` : hostOf(item.data.url);
         main.appendChild(el('div', 'suggest-host', sub));
       }
@@ -121,9 +133,14 @@ export function createSearch({ getTiles, getSettings, onOpen, onEngineChange }) 
       closeSuggest();
       return;
     }
+    // 自定义搜索置于最上方，按向下键即可优先选中
+    items = customEngines().map((engine) => ({ kind: 'engine', engine, query }));
     const matches = findBookmarks(getTiles(), query, 8);
-    items = matches.map((bookmark) => ({ kind: 'bookmark', data: bookmark }));
-    items.push({ kind: 'search', query });
+    items.push(...matches.map((bookmark) => ({ kind: 'bookmark', data: bookmark })));
+    // 当前引擎已在顶部时不再重复展示通用搜索项
+    if (!items.some((item) => item.kind === 'engine' && item.engine.id === currentEngine().id)) {
+      items.push({ kind: 'search', query });
+    }
     renderSuggestions();
   }
 
@@ -143,6 +160,8 @@ export function createSearch({ getTiles, getSettings, onOpen, onEngineChange }) 
       const url = item.data.url;
       closeMenus();
       onOpen(url);
+    } else if (item.kind === 'engine') {
+      window.location.href = engineUrl(item.engine, item.query);
     } else {
       goSearch();
     }
