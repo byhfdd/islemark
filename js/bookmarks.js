@@ -194,6 +194,43 @@ function demoMove(id, { parentId, index, anchorId, after }) {
   return true;
 }
 
+/** 演示模式下直接修改内存中的书签，方便本地预览编辑效果 */
+function demoUpdate(id, title, url) {
+  let found = false;
+  const walk = (items) => {
+    for (const item of items) {
+      if (item.id === id) {
+        if (typeof title === 'string') item.title = title;
+        if (typeof url === 'string') item.url = url;
+        found = true;
+        return true;
+      }
+      if (item.children && walk(item.children)) return true;
+    }
+    return false;
+  };
+  walk(DEMO_TILES);
+  return found;
+}
+
+/** 修改书签的名称与网址 */
+export async function updateBookmarkNode(id, { title, url } = {}) {
+  if (!id) return false;
+  if (!isExtension()) return demoUpdate(id, title, url);
+
+  const changes = {};
+  if (typeof title === 'string') changes.title = title;
+  if (typeof url === 'string') changes.url = url;
+  if (!Object.keys(changes).length) return false;
+
+  try {
+    await chrome.bookmarks.update(id, changes);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /** 真实的书签移动；anchorId/after 表示插入到某个同级书签的前/后，index 为兜底 */
 export async function moveBookmarkNode(id, { parentId, index, anchorId, after } = {}) {
   if (!id) return false;

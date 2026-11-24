@@ -171,6 +171,7 @@ export function createFolderPanel({ onOpen, getIconMode, getSettings, onReorder 
       const btn = el('button', 'fp-item');
       btn.type = 'button';
       btn.title = child.title;
+      btn.dataset.nodeId = child.id;
 
       const icon = el('div', child.type === 'folder' ? 'fp-icon is-folder' : 'fp-icon');
       if (child.sym) {

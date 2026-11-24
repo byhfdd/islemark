@@ -1,6 +1,6 @@
 import { BACKGROUND_PRESETS, QUOTES, SYSTEM_SHORTCUT_DEFS, shortcutUrl } from './constants.js';
 import { loadSettings, saveSettings, loadWallpaper, saveWallpaper, clearWallpaper, cloneSettings } from './store.js';
-import { fetchTiles } from './bookmarks.js';
+import { fetchTiles, updateBookmarkNode } from './bookmarks.js';
 import { createGrid } from './grid.js';
 import { createFolderPanel } from './folder-panel.js';
 import { createSearch } from './search.js';
@@ -75,6 +75,130 @@ function openUrl(url) {
     return;
   }
   window.location.href = url;
+}
+
+function findTileNode(items, id) {
+  for (const item of items) {
+    if (item.id === id) return item;
+    if (item.children) {
+      const found = findTileNode(item.children, id);
+      if (found) return found;
+    }
+  }
+  return null;
+}
+
+function bookmarkFromTarget(target) {
+  if (!(target instanceof Element)) return null;
+  const nodeEl = target.closest('.tile[data-tile-id], .fp-item[data-node-id]');
+  if (!nodeEl) return null;
+  const id = nodeEl.dataset.tileId || nodeEl.dataset.nodeId;
+  const node = findTileNode(state.tiles, id);
+  if (!node || node.type !== 'bookmark' || node.system) return null;
+  return node;
+}
+
+let bookmarkEditor = null;
+
+function closeBookmarkEditor() {
+  if (!bookmarkEditor) return;
+  bookmarkEditor.scrim.remove();
+  bookmarkEditor.dialog.remove();
+  document.removeEventListener('keydown', bookmarkEditor.onKeyDown, true);
+  bookmarkEditor = null;
+}
+
+function openBookmarkEditor(tile) {
+  if (!tile || tile.type !== 'bookmark') return;
+  closeQuickMenu();
+  if (search) search.closeMenus();
+  closeBookmarkEditor();
+
+  const scrim = el('div', 'edit-scrim');
+  const dialog = el('div', 'edit-dialog');
+  dialog.setAttribute('role', 'dialog');
+  dialog.setAttribute('aria-modal', 'true');
+
+  const form = el('form', 'edit-form');
+  form.appendChild(el('h3', 'edit-heading', '修改网站'));
+
+  const nameField = el('label', 'edit-field');
+  nameField.appendChild(el('span', 'edit-label', '网站名'));
+  const nameInput = el('input', 'text-input');
+  nameInput.type = 'text';
+  nameInput.value = tile.title || '';
+  nameInput.placeholder = '网站名';
+  nameField.appendChild(nameInput);
+
+  const urlField = el('label', 'edit-field');
+  urlField.appendChild(el('span', 'edit-label', '网址'));
+  const urlInput = el('input', 'text-input');
+  urlInput.type = 'text';
+  urlInput.value = tile.url || '';
+  urlInput.placeholder = 'https://';
+  urlField.appendChild(urlInput);
+
+  const error = el('p', 'edit-error');
+  const actions = el('div', 'edit-actions');
+  const cancelBtn = el('button', 'mini-btn', '取消');
+  cancelBtn.type = 'button';
+  const saveBtn = el('button', 'mini-btn primary', '保存');
+  saveBtn.type = 'submit';
+  actions.append(cancelBtn, saveBtn);
+
+  form.append(nameField, urlField, error, actions);
+
+  const onKeyDown = (event) => {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      closeBookmarkEditor();
+    }
+  };
+
+  async function save() {
+    const title = nameInput.value.trim();
+    const url = urlInput.value.trim();
+    error.textContent = '';
+    if (!title) {
+      error.textContent = '请填写网站名';
+      nameInput.focus();
+      return;
+    }
+    try {
+      const parsed = new URL(url);
+      if (!/^[a-z][a-z0-9+.-]*:$/i.test(parsed.protocol) || /^(javascript|data):$/i.test(parsed.protocol)) {
+        throw new Error('invalid');
+      }
+    } catch {
+      error.textContent = '网址格式不正确';
+      urlInput.focus();
+      return;
+    }
+
+    saveBtn.disabled = true;
+    const ok = await updateBookmarkNode(tile.id, { title, url });
+    saveBtn.disabled = false;
+    if (!ok) {
+      error.textContent = '保存失败，请稍后重试';
+      return;
+    }
+    closeBookmarkEditor();
+    await refreshBookmarks({ keepPanel: folderPanel.isOpen() });
+  }
+
+  form.addEventListener('submit', (event) => {
+    event.preventDefault();
+    save();
+  });
+  cancelBtn.addEventListener('click', closeBookmarkEditor);
+  scrim.addEventListener('click', closeBookmarkEditor);
+
+  document.body.append(scrim, dialog);
+  dialog.appendChild(form);
+  bookmarkEditor = { scrim, dialog, onKeyDown };
+  document.addEventListener('keydown', onKeyDown, true);
+  nameInput.focus();
+  nameInput.select();
 }
 
 function applyFont() {
@@ -346,6 +470,12 @@ async function init() {
   });
   document.addEventListener('click', (event) => {
     if (!dom.quickMenu.hidden && !dom.menuWrap.contains(event.target)) closeQuickMenu();
+  });
+  document.addEventListener('contextmenu', (event) => {
+    const bookmark = bookmarkFromTarget(event.target);
+    if (!bookmark) return;
+    event.preventDefault();
+    openBookmarkEditor(bookmark);
   });
   dom.pagePrev.addEventListener('click', () => grid.stepPage(-1));
   dom.pageNext.addEventListener('click', () => grid.stepPage(1));
